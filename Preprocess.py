@@ -27,9 +27,9 @@ def preprocess_features():
     return features, targets  # Don't forget to shuffle at some point.
 
 
-# Copied from machine learning crash course
+# Edited from machine learning crash course
 def construct_feature_columns(input_features):
-    return set([tf.feature_column.numeric_column(my_feature) for my_feature in input_features])
+    return set([tf.feature_column.numeric_column(str(my_feature)) for my_feature in input_features])
 
 
 # Copied from machine learning crash course
