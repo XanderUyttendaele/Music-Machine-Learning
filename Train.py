@@ -68,11 +68,4 @@ def train_model(learning_rate, steps, batch_size, features, targets):
     plt.tight_layout()
     plt.plot(root_mean_squared_errors)
 
-    # Output a table with calibration data.
-    calibration_data = pd.DataFrame()
-    calibration_data["predictions"] = pd.Series(predictions)
-    calibration_data["targets"] = pd.Series(targets)
-    display.display(calibration_data.describe())
-
-    print("Final RMSE (on training data): %0.2f" % root_mean_squared_error)
     return linear_regressor

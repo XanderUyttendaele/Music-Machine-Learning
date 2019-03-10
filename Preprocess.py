@@ -7,20 +7,20 @@ from tensorflow.python.data import Dataset
 
 
 Fs = 44100
-onset = 0.5
-offset = 2.5
+onset = 1
+offset = 1 + 1/441
 
 
 def preprocess_features():
     os.chdir("MAPS_data\\MAPS_AkPnBcht_1\\AkPnBcht\\ISOL\\NO")
     files = glob.glob("*.wav")
     filelength = int(Fs*(offset-onset))
-    features = np.zeros((len(files), filelength))
+    features = np.zeros((len(files), int(filelength/2)))
     targets = np.zeros(len(files))
     for i in range(len(files)):
-        features[i] = np.absolute(np.fft.fft(np.take(read(files[i])[1][int(Fs*onset):int(Fs*offset)], 0, axis=1)))
+        features[i] = np.absolute(np.fft.fft(np.take(read(files[i])[1][int(Fs*onset):int(Fs*offset)], 0, axis=1))[:int(filelength/2)])
         targets[i] = files[i].split("_")[5][1:]
-    features = pd.DataFrame(features)
+    features = pd.DataFrame(data = features, columns = [str(i) for i in range(0, int(filelength/2))])
     targets = pd.DataFrame(targets)
     for i in range(0, 5):
         os.chdir("..")
@@ -29,7 +29,7 @@ def preprocess_features():
 
 # Edited from machine learning crash course
 def construct_feature_columns(input_features):
-    return set([tf.feature_column.numeric_column(str(my_feature)) for my_feature in input_features])
+    return set([tf.feature_column.numeric_column(my_feature) for my_feature in input_features])
 
 
 # Copied from machine learning crash course
