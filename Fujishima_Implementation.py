@@ -10,9 +10,9 @@ def detect_pitches(note):
     fft = np.absolute(np.fft.fft(note))
     N = len(note)
     PCP = [0 for i in range(NOTES_IN_SCALE)]
-    M = np.round(12*np.log(Fs/F_REF*np.arange(1,N)/N)/np.log(2)) % NOTES_IN_SCALE
+    M = np.round(12*np.log(Fs/F_REF*np.arange(1,N/2)/N)/np.log(2)) % NOTES_IN_SCALE
     for i in range(M.size):
-        PCP[int(M[i])] += fft[i]**2
+        PCP[int(M[i])] += fft[i+1]**2
     return PCP
 
 
