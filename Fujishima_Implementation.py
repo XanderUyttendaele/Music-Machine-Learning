@@ -3,7 +3,7 @@ import numpy as np
 NOTES_IN_SCALE = 12
 F_REF = 440
 Fs = 44100
-NOTES = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
+NOTES = ['A', 'A#/Bb', 'B', 'C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab']
 
 
 def detect_pitches(note):
@@ -17,4 +17,12 @@ def detect_pitches(note):
 
 
 def interpret_PCP(PCP):
-    return NOTES[np.argmax(PCP)]
+    PCP_scaled = [i/np.max(PCP) for i in PCP]
+    notes = [i > 0.1 for i in PCP_scaled]
+    note_string = ""
+    for i in range(0, NOTES_IN_SCALE):
+        if notes[i]:
+            if i != 0:
+                note_string += ", "
+            note_string += NOTES[i]
+    return note_string
