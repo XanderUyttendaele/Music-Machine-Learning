@@ -16,12 +16,12 @@ for root, directories, filenames in os.walk("C:\\Users\\seb29\\OneDrive - Lakesi
         
         #Produce Constant Q Spectrogram
         components, rate = librosa.load(root+"\\"+base_path+".wav")
-        const_q_vals = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample, n_bins = frequency_bins, bins_per_octave = bins_per_octave)).transpose() #Determine Constant Q values as per our above specifications.
+        const_q_vals = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample, n_bins = frequency_bins, bins_per_octave = bins_per_octave)) #Determine Constant Q values as per our above specifications.
         if(not pt.isfile("C:\\Users\\seb29\\OneDrive - Lakeside School\\Desktop\\chord_labeled_data\\" + base_path + ".npy")):
             np.save("C:\\Users\\seb29\\OneDrive - Lakeside School\\Desktop\\chord_training_data\\" + base_path, const_q_vals)
         
         #Each chord label will be represented by the frames of the spectrogram and the number of possible notes
-        num_spec_cols = const_q_vals.shape[0]
+        num_spec_cols = const_q_vals.shape[1]
         sampling_vec = column_interval_sample*np.arange(num_spec_cols)/float(rate)
         note_label = np.zeros((num_spec_cols,num_notes))
         
