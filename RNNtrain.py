@@ -107,10 +107,10 @@ print("- Training-set:\t\t{}".format(len(y_train)))
 print("- Validation-set:\t{}".format(len(y_valid)))
 print("- Test-set\t{}".format(len(y_test)))
 print(len(x_train)==len(y_train) and len(x_valid) == len(y_valid) and len(x_test) == len(y_test))
-
+y_valid = [y_valid[x][97] for x in range(len(y_valid))]
 
 learning_rate = 0.001 # The optimization initial learning rate
-epochs = 10           # Total number of training epochs
+epochs = 100           # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results
 
@@ -154,8 +154,6 @@ for epoch in range(epochs):
         start = iteration * batch_size
         end = (iteration + 1) * batch_size
         x_batch, y_batch = get_next_batch(x_train, y_train, start, end)
-        print(x_batch.shape)
-        print(y_batch.shape)
         y_batch = [y_batch[x][97] for x in range(len(y_batch))]
         # Run optimization op (backprop)
         feed_dict_batch = {x: x_batch, y: y_batch}
