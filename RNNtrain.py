@@ -11,9 +11,9 @@ target_dir = "E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\"
 num_input = 252
 timesteps = np.load(training_dir + random.choice(os.listdir(training_dir))).shape[0]
 n_classes = 88
-trainingPortions = 6
+trainingPortions = 8
 validationPortions = 2
-testPortions = 2
+testPortions = 0
 
 def load_data():
     fileCount = len([name for name in os.listdir(training_dir) if os.path.isfile(os.path.join(training_dir, name))])
@@ -21,7 +21,7 @@ def load_data():
     print(timesteps)
     print(num_input)
     noteData = np.empty([fileCount, timesteps, num_input])
-    noteTargets = np.empty([fileCount, timesteps, n_classes])
+    noteTargets = np.empty([fileCount, n_classes])
     
     x = 0
     for root, directories, filenames in os.walk(training_dir):
@@ -37,12 +37,12 @@ def load_data():
             x+=1
     portionSize = fileCount // 10
     trainingData = noteData[:portionSize * trainingPortions]
-    validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions)]
-    testData = noteData[portionSize * (trainingPortions + validationPortions):]
+    validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
+    # testData = noteData[portionSize * (trainingPortions + validationPortions):]
     trainingTargets = noteTargets[:portionSize * trainingPortions]
-    validationTargets = noteTargets[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions)]
-    testTargets = noteTargets[portionSize * (trainingPortions + validationPortions):]
-    return trainingData, validationData, testData, trainingTargets, validationTargets, testTargets
+    validationTargets = noteTargets[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
+    # testTargets = noteTargets[portionSize * (trainingPortions + validationPortions):]
+    return trainingData, validationData, trainingTargets, validationTargets # removed test
 
 
 def randomize(x, y):
@@ -90,37 +90,39 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     x = tf.unstack(x, timesteps, 1)
 
     # Define a rnn cell with tensorflow
-    rnn_cell = rnn.BasicRNNCell(num_hidden)
+    lstm_cell = rnn.BasicLSTMCell(num_hidden)
 
     # Get lstm cell output
     # If no initial_state is provided, dtype must be specified
     # If no initial cell state is provided, they will be initialized to zero
-    states_series, current_state = rnn.static_rnn(rnn_cell, x, dtype=tf.float32)
-
+    states_series, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
+    print(current_state)
     # Linear activation, using rnn inner loop last output
-    return tf.matmul(current_state, weights) + biases
+    return tf.matmul(current_state[0], weights) + biases
 
 # x is for data, y is for targets
-x_train, x_valid, x_test, y_train, y_valid, y_test = load_data()
+x_train, x_valid, y_train, y_valid = load_data() # removed test
+print(x_train.shape)
+print(x_valid.shape)
+print(y_train.shape)
+print(y_valid.shape)
 print("Size of:")
 print("- Training-set:\t\t{}".format(len(y_train)))
 print("- Validation-set:\t{}".format(len(y_valid)))
-print("- Test-set\t{}".format(len(y_test)))
-print(len(x_train)==len(y_train) and len(x_valid) == len(y_valid) and len(x_test) == len(y_test))
-y_valid = [y_valid[x][97] for x in range(len(y_valid))]
+# print("- Test-set\t{}".format(len(y_test)))
 
-learning_rate = 0.001 # The optimization initial learning rate
+learning_rate = 0.01 # The optimization initial learning rate
 epochs = 100           # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results
 
-num_hidden_units = 128  # Number of hidden units of the RNN
+num_hidden_units = 10  # Number of hidden units of the RNN
 
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=(None, timesteps, num_input))
 y = tf.placeholder(tf.float32, shape=(None, n_classes)) 
 
-# create weight matrix initialized randomely from N~(0, 0.01)
+# create weight matrix initialized randomly from N~(0, 0.01)
 W = weight_variable(shape=[num_hidden_units, n_classes])
 
 # create bias vector initialized as zero
@@ -154,7 +156,6 @@ for epoch in range(epochs):
         start = iteration * batch_size
         end = (iteration + 1) * batch_size
         x_batch, y_batch = get_next_batch(x_train, y_train, start, end)
-        y_batch = [y_batch[x][97] for x in range(len(y_batch))]
         # Run optimization op (backprop)
         feed_dict_batch = {x: x_batch, y: y_batch}
         sess.run(optimizer, feed_dict=feed_dict_batch)

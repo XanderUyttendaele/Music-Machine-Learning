@@ -17,13 +17,12 @@ for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learni
         #Produce Constant Q Spectrogram
         components, rate = librosa.load(root+"\\"+base_path+".wav")
         const_q_vals = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample, n_bins = frequency_bins, bins_per_octave = bins_per_octave)).transpose() #Determine Constant Q values as per our above specifications.
-        if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path + ".npy")):
-            np.save("E:\\musicdata\\Music-Machine-Learning\\note_training_data\\" + base_path, const_q_vals)
+        
         
         #Each note label will be represented by the frames of the spectrogram and the number of possible notes
         num_spec_cols = const_q_vals.shape[0]
         sampling_vec = column_interval_sample*np.arange(num_spec_cols)/float(rate)
-        note_label = np.zeros((num_spec_cols,num_notes))
+        note_label = np.zeros(num_notes)
         
         #Load our label array with provided file data
         note_file = open(root+"\\"+base_path+".txt")
@@ -39,10 +38,15 @@ for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learni
                 while(end < sampling_vec[maxi]):
                     maxi-= 1
                 note_pitch = int(line_data[2]) - 21 
-                note_label[mini:maxi, note_pitch] = 1
+                note_label[note_pitch] = 1
         note_file.close()
+
+        if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path + ".npy")):
+            np.save("E:\\musicdata\\Music-Machine-Learning\\note_training_data\\" + base_path, const_q_vals[mini:maxi])
         if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path + ".npy")): 
             np.save("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path, note_label)
+        print("{0}".format(const_q_vals[mini:maxi].shape))
+        print("{0}".format(note_label.shape))
         
         count+=1
         if(count%100 == 0):
