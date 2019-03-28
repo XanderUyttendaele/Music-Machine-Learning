@@ -3,13 +3,13 @@ import numpy as np
 import os
 import os.path as pt
 
-column_interval_sample = 512
+column_interval_sample = 128
 frequency_bins = 252
 bins_per_octave = 36
 num_notes = 88
 
 count = 0
-for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learning\\isolated_notes_no_sustain\\"):
+for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learning\\staccato_notes_no_sustain\\"):
     for filename in filenames:
         file_path = pt.join(root, filename)
         base_path = pt.splitext(pt.basename(pt.normpath(file_path)))[0]        
@@ -21,7 +21,8 @@ for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learni
         
         #Each note label will be represented by the frames of the spectrogram and the number of possible notes
         num_spec_cols = const_q_vals.shape[0]
-        sampling_vec = column_interval_sample*np.arange(num_spec_cols)/float(rate)
+        print(num_spec_cols)
+        sampling_vec = column_interval_sample * np.arange(num_spec_cols)/(float(rate))
         note_label = np.zeros(num_notes)
         
         #Load our label array with provided file data
@@ -41,10 +42,10 @@ for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learni
                 note_label[note_pitch] = 1
         note_file.close()
 
-        if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path + ".npy")):
-            np.save("E:\\musicdata\\Music-Machine-Learning\\note_training_data\\" + base_path, const_q_vals[mini:maxi])
-        if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path + ".npy")): 
-            np.save("E:\\musicdata\\Music-Machine-Learning\\note_labeled_data\\" + base_path, note_label)
+        # if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\staccato_labeled_data\\" + base_path + ".npy")):
+        #     np.save("E:\\musicdata\\Music-Machine-Learning\\staccato_training_data\\" + base_path, const_q_vals[mini:maxi])
+        # if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\staccato_labeled_data\\" + base_path + ".npy")): 
+        #     np.save("E:\\musicdata\\Music-Machine-Learning\\staccato_labeled_data\\" + base_path, note_label)
         print("{0}".format(const_q_vals[mini:maxi].shape))
         print("{0}".format(note_label.shape))
         

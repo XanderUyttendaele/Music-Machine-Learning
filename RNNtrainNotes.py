@@ -14,6 +14,10 @@ n_classes = 88
 trainingPortions = 8
 validationPortions = 2
 testPortions = 0
+testLoss = []
+validLoss = []
+testAcc = []
+validAcc = []
 
 def load_data():
     fileCount = len([name for name in os.listdir(training_dir) if os.path.isfile(os.path.join(training_dir, name))])
@@ -36,6 +40,8 @@ def load_data():
             noteTargets[x] = np.load(file_path)
             x+=1
     portionSize = fileCount // 10
+    # different pianos, do this to ensure we're not fitting to a single piano
+    noteData, noteTargets = randomize(noteData, noteTargets)
     trainingData = noteData[:portionSize * trainingPortions]
     validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
     # testData = noteData[portionSize * (trainingPortions + validationPortions):]
@@ -90,7 +96,7 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     x = tf.unstack(x, timesteps, 1)
 
     # Define a rnn cell with tensorflow
-    lstm_cell = rnn.BasicLSTMCell(num_hidden)
+    lstm_cell = rnn.LSTMCell(num_hidden)
 
     # Get lstm cell output
     # If no initial_state is provided, dtype must be specified
@@ -111,12 +117,12 @@ print("- Training-set:\t\t{}".format(len(y_train)))
 print("- Validation-set:\t{}".format(len(y_valid)))
 # print("- Test-set\t{}".format(len(y_test)))
 
-learning_rate = 0.01 # The optimization initial learning rate
-epochs = 100           # Total number of training epochs
+learning_rate = 0.003 # The optimization initial learning rate
+epochs = 1000         # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results
 
-num_hidden_units = 10  # Number of hidden units of the RNN
+num_hidden_units = 15  # Number of hidden units of the RNN
 
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=(None, timesteps, num_input))
@@ -167,6 +173,8 @@ for epoch in range(epochs):
 
             print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".
                   format(iteration, loss_batch, acc_batch))
+            testLoss.append(loss_batch)
+            testAcc.append(acc_batch)
 
     # Run validation after every epoch
 
@@ -176,3 +184,25 @@ for epoch in range(epochs):
     print("Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
           format(epoch + 1, loss_valid, acc_valid))
     print('---------------------------------------------------------')
+    validLoss.append(loss_valid)
+    validAcc.append(acc_batch)
+epochRange = np.arange(epochs)
+plt.figure(1)
+plt.plot(epochRange,testLoss,'-',label='Test Loss')
+plt.plot(epochRange,validLoss,'-',label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Loss vs. Epochs')
+plt.grid(True)
+plt.legend(loc='lower left')
+plt.show()
+
+plt.figure(2)
+plt.plot(epochRange,testAcc,'-',label='Test Accuracy')
+plt.plot(epochRange,validAcc,'-',label='Validation Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('Accuracy vs. Epochs')
+plt.grid(True)
+plt.legend(loc='upper left')
+plt.show()
