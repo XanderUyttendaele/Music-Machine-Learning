@@ -21,8 +21,12 @@ def calculate_PCP(note):
     return PCP
 
 
-def calculate_chromagram(file, frame_width = 512):
+def calculate_chromagram(file, frame_width = 512, start = 0, end = None):
     file = np.mean(read(file)[1], axis = 1)
+    if end != None:
+        file = file[start:end]
+    else:
+        file = file[start:]
     num_frames = int(2*file.size/frame_width - 1)
     chromagram = np.zeros((num_frames, NOTES_IN_SCALE))
     for i in range(num_frames):
@@ -50,5 +54,17 @@ def interpret_PCP(PCP):
 
 def plot_chromagram(chromagram):
     plot = plt.pcolormesh(chromagram.transpose())
+    plt.colorbar(plot)
+    plt.show()
+
+
+def plot_notes(chromagram, cutoff = 0.1):
+    shape = chromagram.shape
+    notes = np.zeros(shape)
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            if chromagram[i][j] >= cutoff:
+                notes[i][j] = 1
+    plot = plt.pcolormesh(notes.transpose())
     plt.colorbar(plot)
     plt.show()
