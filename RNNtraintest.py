@@ -37,7 +37,7 @@ def load_data():
             temp = np.load(file_path)
             # if temp.shape[0] > longest:
             #     longest = temp.shape[0]
-            clipCount += int(math.floor(temp.shape[0]/stepCount))
+            clipCount += int(math.ceil(temp.shape[0]/stepCount))
     # fileCount = len([name for name in os.listdir(training_dir) if os.path.isfile(os.path.join(training_dir, name))])
     # print(fileCount)
     # print(timesteps)
@@ -45,7 +45,7 @@ def load_data():
     # noteData = np.empty([fileCount, longest, num_input]) # timesteps, num_input])
     # noteTargets = np.empty([fileCount, longest, n_classes])
     noteData = np.empty([clipCount, stepCount, num_input])
-    noteTargets = np.empty([clipCount, n_classes])
+    noteTargets = np.empty([clipCount, stepCount, n_classes])
     
     x = 0
     for root, directories, filenames in os.walk(training_dir):
@@ -57,7 +57,7 @@ def load_data():
             # print(temp.shape)
             # print(stepCount)
             # print(clipCount)
-            clips = int(math.floor(temp.shape[0]/stepCount))
+            clips = int(math.ceil(temp.shape[0]/stepCount))
             temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteData[x] = temp[stepCount*i:stepCount*(i+1)]
@@ -70,10 +70,10 @@ def load_data():
             temp = np.load(file_path)
             # noteTargets[x] = pad_array(temp, longest)
             # x+=1
-            clips = int(math.floor(temp.shape[0]/stepCount))
+            clips = int(math.ceil(temp.shape[0]/stepCount))
             temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
-                noteTargets[x] = temp[stepCount*(i+1)-1]
+                noteTargets[x] = temp[stepCount*i:stepCount*(i+1)]
                 x+=1
     portionSize = clipCount // 10
     # different pianos, do this to ensure we're not fitting to a single piano
@@ -137,8 +137,11 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     states_series, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
     # Linear activation, using rnn inner loop last output
     # print(current_state[1])
-    return tf.matmul(states_series[-1], weights) + biases ## something is wrong here... or is it???
+    return tf.matmul(current_state[1], weights) + biases ## something is wrong here... or is it???
     # return [tf.matmul(temp,weights) + biases for temp in states_series] # does this even make sense
+
+def lossFN(y_slice):
+    return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_slice, logits=output_logits)
 
 def correctPred(y_slice):
     # I know it's not necessary to check y_slice > threshold but it just makes comparison easier ACCURACY IS CURRENTLY VERY HIGH BECAUSE IT'S COUNTING 0s as well... need to compare indexes instead!!
@@ -167,14 +170,14 @@ epochs = 1000         # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results
 threshold = 0.7       # Threshold for determining a "note"
-num_hidden_units = 15 # Number of hidden units of the RNN
+num_hidden_units = 15  # Number of hidden units of the RNN
 
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=(None, stepCount, num_input))
-y = tf.placeholder(tf.float32, shape=(None, n_classes)) 
+y = tf.placeholder(tf.float32, shape=(None, stepCount, n_classes)) 
 
 # create weight matrix initialized randomly from N~(0, 0.01)
-W = weight_variable(shape=[num_hidden_units, n_classes])
+W = weight_variable(shape=[num_hidden_units, stepCount, n_classes])
 
 # create bias vector initialized as zero
 b = bias_variable(shape=[n_classes])
@@ -183,10 +186,10 @@ output_logits = RNN(x, W, b, stepCount, num_hidden_units)
 y_pred = tf.nn.softmax(output_logits)
 
 # Define the loss function, optimizer, and accuracy
-loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits), axis = 0, name='loss')
+loss = tf.reduce_mean(tf.map_fn(lossFN, tf.transpose(y, perm = [1,0,2])))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
-correct_prediction = tf.equal(tf.to_int32(output_logits>threshold), tf.to_int32(y>threshold), name='correct_pred')
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
+correct_prediction = tf.map_fn(correctPred, tf.transpose(y, perm = [1,0,2]))
+accuracy = tf.reduce_mean(correct_prediction, name='accuracy')
 
 # Creating the op for initializing all variables
 init = tf.global_variables_initializer()
