@@ -104,7 +104,8 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     states_series, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
     print(current_state)
     # Linear activation, using rnn inner loop last output
-    return tf.matmul(current_state[0], weights) + biases
+    print(current_state[0])
+    return tf.matmul(current_state[1], weights) + biases
 
 # x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data() # removed test
@@ -117,7 +118,7 @@ print("- Training-set:\t\t{}".format(len(y_train)))
 print("- Validation-set:\t{}".format(len(y_valid)))
 # print("- Test-set\t{}".format(len(y_test)))
 
-learning_rate = 0.003 # The optimization initial learning rate
+learning_rate = 0.01  # The optimization initial learning rate
 epochs = 1000         # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results

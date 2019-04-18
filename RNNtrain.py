@@ -5,6 +5,8 @@ from tensorflow.contrib import rnn
 import random
 import os
 import os.path as pt
+import math
+import statistics
 
 training_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_training\\"
 target_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\"
@@ -18,12 +20,13 @@ testLoss = []
 validLoss = []
 testAcc = []
 validAcc = []
-stepCount = int(floor(10/(512/22050.0))) # 10 seconds, assuming 512 hop length and 22050 rate
+stepCount = int(math.floor(10/(512/22050.0))) # 10 seconds, assuming 512 hop length and 22050 rate
+keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
 def pad_array(array, length):
     temp = array.shape[0]
     toAdd = np.zeros((length-temp, array.shape[1]))
-    return np.concatenate(array, toAdd)
+    return np.concatenate([array, toAdd])
 
 def load_data():
     # longest = 0
@@ -34,7 +37,7 @@ def load_data():
             temp = np.load(file_path)
             # if temp.shape[0] > longest:
             #     longest = temp.shape[0]
-            clipCount += int(ceil(temp.shape[0]/stepCount))
+            clipCount += int(math.ceil(temp.shape[0]/stepCount))
     # fileCount = len([name for name in os.listdir(training_dir) if os.path.isfile(os.path.join(training_dir, name))])
     # print(fileCount)
     # print(timesteps)
@@ -51,7 +54,10 @@ def load_data():
             temp = np.load(file_path)
             # noteData[x] = pad_array(temp, longest)
             # x+=1
-            clips = int(ceil(temp.shape[0]/stepCount))
+            # print(temp.shape)
+            # print(stepCount)
+            # print(clipCount)
+            clips = int(math.ceil(temp.shape[0]/stepCount))
             temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteData[x] = temp[stepCount*i:stepCount*(i+1)]
@@ -64,7 +70,7 @@ def load_data():
             temp = np.load(file_path)
             # noteTargets[x] = pad_array(temp, longest)
             # x+=1
-            clips = int(ceil(temp.shape[0]/stepCount))
+            clips = int(math.ceil(temp.shape[0]/stepCount))
             temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteTargets[x] = temp[stepCount*i:stepCount*(i+1)]
@@ -120,7 +126,7 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # Required shape: 'timesteps' tensors list of shape (batch_size, n_input)
 
     # Unstack to get a list of 'timesteps' tensors of shape (batch_size, n_input)
-    x = tf.unstack(x, stepCount, 1)
+    x = tf.unstack(x, timesteps, 1)
 
     # Define a rnn cell with tensorflow
     lstm_cell = rnn.LSTMCell(num_hidden)
@@ -129,10 +135,25 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # If no initial_state is provided, dtype must be specified
     # If no initial cell state is provided, they will be initialized to zero
     states_series, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
-    print(current_state)
     # Linear activation, using rnn inner loop last output
-    return tf.matmul(current_state[0], weights) + biases
+    # print(current_state[1])
+    return tf.matmul(current_state[1], weights) + biases ## something is wrong here... or is it???
+    # return [tf.matmul(temp,weights) + biases for temp in states_series] # does this even make sense
 
+def lossFN(y_slice):
+    return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_slice, logits=output_logits)
+
+def correctPred(y_slice):
+    # I know it's not necessary to check y_slice > threshold but it just makes comparison easier ACCURACY IS CURRENTLY VERY HIGH BECAUSE IT'S COUNTING 0s as well... need to compare indexes instead!!
+    # zero = tf.constant(0, dtype = tf.int32)
+    # logitOnes = tf.not_equal(output_logits, zero)
+    # yOnes = tf.not_equal(output_logits, zero)
+    # logitIndices = tf.where(logitOnes)
+    # yIndices = tf.where(yOnes)
+    logitsKeys = tf.gather_nd(keyRange, output_logits)
+    yKeys = tf.gather_nd(keyRange, output_logits)
+
+    return tf.cast(tf.equal(tf.to_int32(output_logits > threshold), tf.to_int32(y_slice), name='correct_pred'),tf.float32) # this is wrong... same output is obv not gonna be right for all labels
 # x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data() # removed test
 print(x_train.shape)
@@ -144,12 +165,12 @@ print("- Training-set:\t\t{}".format(y_train.shape[0]))
 print("- Validation-set:\t{}".format(y_valid.shape[0]))
 # print("- Test-set\t{}".format(len(y_test)))
 
-learning_rate = 0.003 # The optimization initial learning rate
+learning_rate = 0.001 # The optimization initial learning rate
 epochs = 1000         # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results
-
-num_hidden_units = 15  # Number of hidden units of the RNN
+threshold = 0.7       # Threshold for determining a "note"
+num_hidden_units = 15 # Number of hidden units of the RNN
 
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=(None, stepCount, num_input))
@@ -164,14 +185,11 @@ b = bias_variable(shape=[n_classes])
 output_logits = RNN(x, W, b, stepCount, num_hidden_units)
 y_pred = tf.nn.softmax(output_logits)
 
-# Model predictions
-cls_prediction = tf.argmax(output_logits, axis=1, name='predictions')
-
 # Define the loss function, optimizer, and accuracy
-loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits), axis = 0, name='loss')
+loss = tf.reduce_mean(tf.map_fn(lossFN, tf.transpose(y, perm = [1,0,2])))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
-correct_prediction = tf.equal(tf.argmax(output_logits, 1), tf.argmax(y, 1), name='correct_pred')
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
+correct_prediction = tf.map_fn(correctPred, tf.transpose(y, perm = [1,0,2]))
+accuracy = tf.reduce_mean(correct_prediction, name='accuracy')
 
 # Creating the op for initializing all variables
 init = tf.global_variables_initializer()
