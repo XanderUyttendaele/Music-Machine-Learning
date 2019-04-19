@@ -10,4 +10,3 @@ def generateSpec(column_interval_sample, frequency_bins, bins_per_octave, file_p
     plt.figure()
     plt.imshow(np.abs(const_q_vals), aspect = "auto")
     plt.plot()
-    

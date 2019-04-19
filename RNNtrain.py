@@ -134,10 +134,10 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # Get lstm cell output
     # If no initial_state is provided, dtype must be specified
     # If no initial cell state is provided, they will be initialized to zero
-    states_series, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
+    outputs, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
     # Linear activation, using rnn inner loop last output
     # print(current_state[1])
-    return tf.matmul(states_series[-1], weights) + biases ## something is wrong here... or is it???
+    return tf.matmul(outputs[-1], weights) + biases # Fixed bug
     # return [tf.matmul(temp,weights) + biases for temp in states_series] # does this even make sense
 
 def correctPred(y_slice):
