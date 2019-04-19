@@ -20,7 +20,7 @@ testLoss = []
 validLoss = []
 testAcc = []
 validAcc = []
-stepCount = int(math.floor(10/(512/22050.0))) # 10 seconds, assuming 512 hop length and 22050 rate
+stepCount = int(math.floor(2/(512/22050.0))) # 10 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
 def pad_array(array, length):
@@ -58,7 +58,7 @@ def load_data():
             # print(stepCount)
             # print(clipCount)
             clips = int(math.floor(temp.shape[0]/stepCount))
-            temp = pad_array(temp,clips * stepCount)
+            # temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteData[x] = temp[stepCount*i:stepCount*(i+1)]
                 x+=1
@@ -71,7 +71,7 @@ def load_data():
             # noteTargets[x] = pad_array(temp, longest)
             # x+=1
             clips = int(math.floor(temp.shape[0]/stepCount))
-            temp = pad_array(temp,clips * stepCount)
+            # temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteTargets[x] = temp[stepCount*(i+1)-1]
                 x+=1
@@ -185,7 +185,7 @@ y_pred = tf.nn.softmax(output_logits)
 # Define the loss function, optimizer, and accuracy
 loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits), axis = 0, name='loss')
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
-correct_prediction = tf.equal(tf.to_int32(output_logits>threshold), tf.to_int32(y>threshold), name='correct_pred')
+correct_prediction = tf.equal(tf.math.top_k(output_logits, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], tf.math.top_k(y, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], name='correct_pred')
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
 
 # Creating the op for initializing all variables
@@ -210,11 +210,9 @@ for epoch in range(epochs):
 
         if iteration % display_freq == 0:
             # Calculate and display the batch loss and accuracy
-            loss_batch, acc_batch = sess.run([loss, accuracy],
-                                             feed_dict=feed_dict_batch)
+            loss_batch, acc_batch = sess.run([loss, accuracy], feed_dict=feed_dict_batch)
 
-            print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".
-                  format(iteration, loss_batch, acc_batch))
+            print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".format(iteration, loss_batch, acc_batch))
             testLoss.append(loss_batch)
             testAcc.append(acc_batch)
 
