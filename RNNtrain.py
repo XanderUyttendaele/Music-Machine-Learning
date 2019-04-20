@@ -2,16 +2,14 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.contrib import rnn
-import random
 import os
 import os.path as pt
 import math
-import statistics
+
 
 training_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_training\\"
 target_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\"
 num_input = 252
-# timesteps = np.load(training_dir + random.choice(os.listdir(training_dir))).shape[0]
 n_classes = 88
 trainingPortions = 8
 validationPortions = 2
@@ -23,68 +21,50 @@ validAcc = []
 stepCount = int(math.floor(2/(512/22050.0))) # 2 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
-def pad_array(array, length):
-    temp = array.shape[0]
-    toAdd = np.zeros((length-temp, array.shape[1]))
-    return np.concatenate([array, toAdd])
 
 def load_data():
-    # longest = 0
     clipCount = 0
     for root, directories, filenames in os.walk(training_dir):
         for filename in filenames:
             file_path = pt.join(root, filename)
             temp = np.load(file_path)
-            # if temp.shape[0] > longest:
-            #     longest = temp.shape[0]
             clipCount += int(math.floor(temp.shape[0]/stepCount))
-    # fileCount = len([name for name in os.listdir(training_dir) if os.path.isfile(os.path.join(training_dir, name))])
-    # print(fileCount)
-    # print(timesteps)
-    print(num_input)
-    # noteData = np.empty([fileCount, longest, num_input]) # timesteps, num_input])
-    # noteTargets = np.empty([fileCount, longest, n_classes])
+
     noteData = np.empty([clipCount, stepCount, num_input])
     noteTargets = np.empty([clipCount, n_classes])
-    
+
     x = 0
     for root, directories, filenames in os.walk(training_dir):
         for filename in filenames:
             file_path = pt.join(root, filename)
             temp = np.load(file_path)
-            # noteData[x] = pad_array(temp, longest)
-            # x+=1
-            # print(temp.shape)
-            # print(stepCount)
-            # print(clipCount)
             clips = int(math.floor(temp.shape[0]/stepCount))
-            # temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteData[x] = temp[stepCount*i:stepCount*(i+1)]
-                x+=1
+                x += 1
 
     x = 0
     for root, directories, filenames in os.walk(target_dir):
         for filename in filenames:
             file_path = pt.join(root, filename)
             temp = np.load(file_path)
-            # noteTargets[x] = pad_array(temp, longest)
-            # x+=1
             clips = int(math.floor(temp.shape[0]/stepCount))
-            # temp = pad_array(temp,clips * stepCount)
             for i in range(0, clips):
                 noteTargets[x] = temp[stepCount*(i+1)-1]
                 x+=1
     portionSize = clipCount // 10
+
     # different pianos, do this to ensure we're not fitting to a single piano
     noteData, noteTargets = randomize(noteData, noteTargets)
     trainingData = noteData[:portionSize * trainingPortions]
     validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
     # testData = noteData[portionSize * (trainingPortions + validationPortions):]
+
     trainingTargets = noteTargets[:portionSize * trainingPortions]
     validationTargets = noteTargets[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
     # testTargets = noteTargets[portionSize * (trainingPortions + validationPortions):]
-    return trainingData, validationData, trainingTargets, validationTargets # removed test
+
+    return trainingData, validationData, trainingTargets, validationTargets
 
 
 def randomize(x, y):
@@ -93,10 +73,12 @@ def randomize(x, y):
     shuffled_y = y[permutation]
     return shuffled_x, shuffled_y
 
+
 def get_next_batch(x, y, start, end):
     x_batch = x[start:end]
     y_batch = y[start:end]
     return x_batch, y_batch
+
 
 # weight and bias wrappers
 def weight_variable(shape):
@@ -107,6 +89,7 @@ def weight_variable(shape):
     """
     initer = tf.truncated_normal_initializer(stddev=0.01)
     return tf.get_variable('W', dtype=tf.float32, shape=shape, initializer=initer)
+
 
 def bias_variable(shape):
     """
@@ -119,8 +102,8 @@ def bias_variable(shape):
                            dtype=tf.float32,
                            initializer=initial)
 
-def RNN(x, weights, biases, timesteps, num_hidden):
 
+def RNN(x, weights, biases, timesteps, num_hidden):
     # Prepare data shape to match `rnn` function requirements
     # Current data input shape: (batch_size, timesteps, n_input)
     # Required shape: 'timesteps' tensors list of shape (batch_size, n_input)
@@ -136,23 +119,11 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # If no initial cell state is provided, they will be initialized to zero
     outputs, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
     # Linear activation, using rnn inner loop last output
-    # print(current_state[1])
-    return tf.matmul(outputs[-1], weights) + biases # Fixed bug
-    # return [tf.matmul(temp,weights) + biases for temp in states_series] # does this even make sense
+    return tf.matmul(outputs[-1], weights) + biases
 
-def correctPred(y_slice):
-    # I know it's not necessary to check y_slice > threshold but it just makes comparison easier ACCURACY IS CURRENTLY VERY HIGH BECAUSE IT'S COUNTING 0s as well... need to compare indexes instead!!
-    # zero = tf.constant(0, dtype = tf.int32)
-    # logitOnes = tf.not_equal(output_logits, zero)
-    # yOnes = tf.not_equal(output_logits, zero)
-    # logitIndices = tf.where(logitOnes)
-    # yIndices = tf.where(yOnes)
-    logitsKeys = tf.gather_nd(keyRange, output_logits)
-    yKeys = tf.gather_nd(keyRange, output_logits)
 
-    return tf.cast(tf.equal(tf.to_int32(output_logits > threshold), tf.to_int32(y_slice), name='correct_pred'),tf.float32) # this is wrong... same output is obv not gonna be right for all labels
 # x is for data, y is for targets
-x_train, x_valid, y_train, y_valid = load_data() # removed test
+x_train, x_valid, y_train, y_valid = load_data()
 print(x_train.shape)
 print(x_valid.shape)
 print(y_train.shape)
@@ -163,7 +134,7 @@ print("- Validation-set:\t{}".format(y_valid.shape[0]))
 # print("- Test-set\t{}".format(len(y_test)))
 
 learning_rate = 0.001 # The optimization initial learning rate
-epochs = 1000         # Total number of training epochs
+epochs = 10           # Total number of training epochs
 batch_size = 100      # Training batch size
 display_freq = 100    # Frequency of displaying the training results
 threshold = 0.7       # Threshold for determining a "note"
@@ -185,14 +156,18 @@ y_pred = tf.nn.softmax(output_logits)
 # Define the loss function, optimizer, and accuracy
 loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits), axis = 0, name='loss')
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
-correct_prediction = tf.equal(tf.math.top_k(output_logits, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], tf.math.top_k(y, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], name='correct_pred') # this line is very wrong
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
+# Accuracy: the percentage of individual notes it gets right.
+prediction = tf.greater(y_pred, threshold)
+accuracy = tf.metrics.accuracy(y, prediction)[1]
+stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name]
 
-# Creating the op for initializing all variables
-init = tf.global_variables_initializer()
+# Creating the ops for initializing all variables
+init_g = tf.global_variables_initializer()
+init_l = tf.local_variables_initializer()
 
 sess = tf.InteractiveSession()
-sess.run(init)
+sess.run(init_g)
+sess.run(init_l)
 global_step = 0
 # Number of training iterations in each epoch
 num_tr_iter = int(y_train.shape[0] / batch_size)
@@ -208,13 +183,15 @@ for epoch in range(epochs):
         feed_dict_batch = {x: x_batch, y: y_batch}
         sess.run(optimizer, feed_dict=feed_dict_batch)
 
-        if iteration % display_freq == 0:
+        if iteration % display_freq == -1 % display_freq:
             # Calculate and display the batch loss and accuracy
             loss_batch, acc_batch = sess.run([loss, accuracy], feed_dict=feed_dict_batch)
-
             print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".format(iteration, loss_batch, acc_batch))
             testLoss.append(loss_batch)
             testAcc.append(acc_batch)
+
+            # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
+            sess.run(tf.variables_initializer(stream_vars_acc))
 
     # Run validation after every epoch
 
@@ -225,7 +202,11 @@ for epoch in range(epochs):
           format(epoch + 1, loss_valid, acc_valid))
     print('---------------------------------------------------------')
     validLoss.append(loss_valid)
-    validAcc.append(acc_batch)
+    validAcc.append(acc_valid)
+
+    # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
+    sess.run(tf.variables_initializer(stream_vars_acc))
+
 epochRange = np.arange(epochs)
 plt.figure(1)
 plt.plot(epochRange,testLoss,'-',label='Test Loss')
