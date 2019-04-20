@@ -20,7 +20,7 @@ testLoss = []
 validLoss = []
 testAcc = []
 validAcc = []
-stepCount = int(math.floor(2/(512/22050.0))) # 10 seconds, assuming 512 hop length and 22050 rate
+stepCount = int(math.floor(2/(512/22050.0))) # 2 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
 def pad_array(array, length):
@@ -171,7 +171,7 @@ num_hidden_units = 15 # Number of hidden units of the RNN
 
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=(None, stepCount, num_input))
-y = tf.placeholder(tf.float32, shape=(None, n_classes)) 
+y = tf.placeholder(tf.float32, shape=(None, n_classes))
 
 # create weight matrix initialized randomly from N~(0, 0.01)
 W = weight_variable(shape=[num_hidden_units, n_classes])
@@ -185,7 +185,7 @@ y_pred = tf.nn.softmax(output_logits)
 # Define the loss function, optimizer, and accuracy
 loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits), axis = 0, name='loss')
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
-correct_prediction = tf.equal(tf.math.top_k(output_logits, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], tf.math.top_k(y, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], name='correct_pred')
+correct_prediction = tf.equal(tf.math.top_k(output_logits, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], tf.math.top_k(y, tf.cast(tf.math.count_nonzero(y),tf.int32))[1], name='correct_pred') # this line is very wrong
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
 
 # Creating the op for initializing all variables
