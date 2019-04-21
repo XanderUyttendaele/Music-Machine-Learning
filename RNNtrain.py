@@ -53,11 +53,9 @@ def load_data():
     noteData, noteTargets = randomize(noteData, noteTargets)
     trainingData = noteData[:portionSize * trainingPortions]
     validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
-    # testData = noteData[portionSize * (trainingPortions + validationPortions):]
 
     trainingTargets = noteTargets[:portionSize * trainingPortions]
     validationTargets = noteTargets[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
-    # testTargets = noteTargets[portionSize * (trainingPortions + validationPortions):]
 
     return trainingData, validationData, trainingTargets, validationTargets
 
@@ -121,9 +119,8 @@ def RNN(x, weights, biases, timesteps, num_hidden):
 x_train, x_valid, y_train, y_valid = load_data()
 
 learning_rate = 0.01    # The optimization initial learning rate
-epochs = 10             # Total number of training epochs
+epochs = 100            # Total number of training epochs
 batch_size = 100        # Training batch size
-display_freq = 100      # Frequency of displaying the training results
 threshold = 0.5         # Threshold for determining a "note"
 num_hidden = 64         # Number of hidden units of the RNN
 
@@ -149,7 +146,10 @@ def build_graph(learning_rate, num_hidden, threshold):
     # Accuracy: the percentage of individual notes it gets right.
     prediction = tf.greater(y_pred, threshold)
     accuracy = tf.metrics.accuracy(y, prediction)[1]
-    stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name]
+    precision = tf.metrics.precision(y, prediction)[1]
+    recall = tf.metrics.recall(y, prediction)[1]
+    stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name
+                       or 'precision/' in v.name or 'recall/' in v.name]
 
     # Creating the ops for initializing all variables
     init_g = tf.global_variables_initializer()
@@ -159,21 +159,26 @@ def build_graph(learning_rate, num_hidden, threshold):
     sess.run(init_g)
     sess.run(init_l)
 
-    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, x, y, W, b
+    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b
 
 
-def train(x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy):
+def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy, precision, recall):
     training_loss = []
     training_accuracies = []
+    training_precisions = []
+    training_recalls = []
     validation_loss = []
     validation_accuracies = []
+    validation_precisions = []
+    validation_recalls = []
 
     # Number of training iterations in each epoch
     num_tr_iter = int(y_train.shape[0] / batch_size)
     for epoch in range(1, epochs+1):
         print('Training epoch: {}'.format(epoch))
+        print('---------------------------------------------------------')
         x_train, y_train = randomize(x_train, y_train)
-        loss_batch, acc_batch = [0, 0]
+        loss_batch, acc_batch, prec_batch, rec_batch = [0, 0, 0, 0]
         for iteration in range(num_tr_iter):
             start = iteration * batch_size
             end = (iteration + 1) * batch_size
@@ -182,32 +187,38 @@ def train(x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy):
             feed_dict_batch = {x: x_batch, y: y_batch}
 
             # Calculate and display the batch loss and accuracy
-            _, loss_batch, acc_batch = sess.run([optimizer, loss, accuracy], feed_dict=feed_dict_batch)
+            _, loss_batch, acc_batch, prec_batch, rec_batch = sess.run([optimizer, loss, accuracy, precision, recall], feed_dict=feed_dict_batch)
         training_loss.append(loss_batch)  # Loss for just last batch
         training_accuracies.append(acc_batch)  # Averaged accuracy over epoch
-        print("Training Epoch {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".format(epoch, loss_batch, acc_batch))
+        training_precisions.append(prec_batch)
+        training_recalls.append(rec_batch)
+        print("Training Epoch {0:3d}: Loss={1:.2f}, Accuracy={2:.01%}, Precision={3:.01%}, Recall={4:.01%}".format(epoch, loss_batch, acc_batch, prec_batch, rec_batch))
 
         # Reset accuracy op, so validation accuracy can be separate.
         sess.run(tf.variables_initializer(stream_vars_acc))
 
         # Run validation after every epoch
         feed_dict_valid = {x: x_valid, y: y_valid}
-        loss_valid, acc_valid = sess.run([loss, accuracy], feed_dict=feed_dict_valid)
+        loss_valid, acc_valid, prec_valid, rec_valid = sess.run([loss, accuracy, precision, recall], feed_dict=feed_dict_valid)
         print('---------------------------------------------------------')
-        print("Validation Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
-              format(epoch, loss_valid, acc_valid))
+        print("Validation Epoch: {0}, Loss: {1:.2f}, Accuracy: {2:.01%}, Precision={3:.01%}, Recall={4:.01%}".
+              format(epoch, loss_valid, acc_valid, prec_valid, rec_valid))
         print('---------------------------------------------------------')
         validation_loss.append(loss_valid)
         validation_accuracies.append(acc_valid)
+        validation_precisions.append(prec_valid)
+        validation_recalls.append(rec_valid)
 
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
 
-    return training_loss, training_accuracies, validation_loss, validation_accuracies
+    return training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, \
+           validation_accuracies, validation_precisions, validation_recalls
 
 
-def plot_results(losses, accuracies, train_or_val):
+def plot_results(losses, accuracies, precisions, recalls, train_or_val):
     epoch_range = np.arange(epochs)
+
     plt.figure(1)
     plt.plot(epoch_range, losses, '-', label=train_or_val + ' Loss')
     plt.xlabel('Epochs')
@@ -221,13 +232,33 @@ def plot_results(losses, accuracies, train_or_val):
     plt.plot(epoch_range, accuracies, '-', label=train_or_val + ' Accuracy')
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
-    plt.title('Accuracy vs. Epochs')
+    plt.title('Accuracy vs Epochs')
+    plt.grid(True)
+    plt.legend(loc='upper left')
+    plt.show()
+
+    plt.figure(3)
+    plt.plot(epoch_range, precisions, '-', label=train_or_val + ' Precision')
+    plt.xlabel('Epochs')
+    plt.ylabel('Precision')
+    plt.title('Precision vs Epochs')
+    plt.grid(True)
+    plt.legend(loc='upper left')
+    plt.show()
+
+    plt.figure(4)
+    plt.plot(epoch_range, recalls, '-', label=train_or_val + ' Recall')
+    plt.xlabel('Epochs')
+    plt.ylabel('Recall')
+    plt.title('Recall vs Epochs')
     plt.grid(True)
     plt.legend(loc='upper left')
     plt.show()
 
 
-sess, stream_vars_acc, loss, optimizer, prediction, accuracy, x, y, W, b = build_graph(learning_rate, num_hidden, threshold)
-training_loss, training_accuracies, validation_loss, validation_accuracies = train(x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy)
-plot_results(training_loss, training_accuracies, 'Training')
-plot_results(validation_loss, validation_accuracies, 'Validation')
+sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b = build_graph(learning_rate, num_hidden, threshold)
+training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, validation_accuracies, \
+    validation_precisions, validation_recalls = train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss,
+                                                      optimizer, accuracy, precision, recall)
+plot_results(training_loss, training_accuracies, training_precisions, training_recalls, 'Training')
+plot_results(validation_loss, validation_accuracies, validation_precisions, validation_recalls, 'Validation')
