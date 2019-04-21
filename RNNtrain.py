@@ -133,12 +133,12 @@ print("- Training-set:\t\t{}".format(y_train.shape[0]))
 print("- Validation-set:\t{}".format(y_valid.shape[0]))
 # print("- Test-set\t{}".format(len(y_test)))
 
-learning_rate = 0.001 # The optimization initial learning rate
-epochs = 10           # Total number of training epochs
-batch_size = 100      # Training batch size
-display_freq = 100    # Frequency of displaying the training results
-threshold = 0.7       # Threshold for determining a "note"
-num_hidden_units = 15 # Number of hidden units of the RNN
+learning_rate = 0.01    # The optimization initial learning rate
+epochs = 10             # Total number of training epochs
+batch_size = 100        # Training batch size
+display_freq = 100      # Frequency of displaying the training results
+threshold = 0.5         # Threshold for determining a "note"
+num_hidden_units = 64   # Number of hidden units of the RNN
 
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=(None, stepCount, num_input))
@@ -151,7 +151,7 @@ W = weight_variable(shape=[num_hidden_units, n_classes])
 b = bias_variable(shape=[n_classes])
 
 output_logits = RNN(x, W, b, stepCount, num_hidden_units)
-y_pred = tf.nn.softmax(output_logits)
+y_pred = tf.nn.sigmoid(output_logits)
 
 # Define the loss function, optimizer, and accuracy
 loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=output_logits), name='loss')
@@ -175,6 +175,7 @@ num_tr_iter = int(y_train.shape[0] / batch_size)
 for epoch in range(1, epochs+1):
     print('Training epoch: {}'.format(epoch))
     x_train, y_train = randomize(x_train, y_train)
+    loss_batch, acc_batch = [0, 0]
     for iteration in range(num_tr_iter):
         global_step += 1
         start = iteration * batch_size
@@ -182,23 +183,19 @@ for epoch in range(1, epochs+1):
         x_batch, y_batch = get_next_batch(x_train, y_train, start, end)
         # Run optimization op (backprop)
         feed_dict_batch = {x: x_batch, y: y_batch}
-        sess.run(optimizer, feed_dict=feed_dict_batch)
 
-        if iteration % display_freq == -1 % display_freq:
-            # Calculate and display the batch loss and accuracy
-            loss_batch, acc_batch = sess.run([loss, accuracy], feed_dict=feed_dict_batch)
-            print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".format(iteration, loss_batch, acc_batch))
-            testLoss.append(loss_batch)
-            testAcc.append(acc_batch)
+        # Calculate and display the batch loss and accuracy
+        _, loss_batch, acc_batch = sess.run([optimizer, loss, accuracy], feed_dict=feed_dict_batch)
+    print("Training Epoch {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}".format(epoch, loss_batch, acc_batch))
 
-            # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
-            sess.run(tf.variables_initializer(stream_vars_acc))
+    # Reset accuracy op, so validation accuracy can be separate.
+    sess.run(tf.variables_initializer(stream_vars_acc))
 
     # Run validation after every epoch
     feed_dict_valid = {x: x_valid, y: y_valid}
     loss_valid, acc_valid = sess.run([loss, accuracy], feed_dict=feed_dict_valid)
     print('---------------------------------------------------------')
-    print("Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
+    print("Validation Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
           format(epoch, loss_valid, acc_valid))
     print('---------------------------------------------------------')
     validLoss.append(loss_valid)
