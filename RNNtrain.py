@@ -7,16 +7,16 @@ import os.path as pt
 import math
 
 
-training_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_training\\"
-target_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\"
+training_dir = "song_data\\song_data_training\\"
+target_dir = "song_data\\song_data_labeled\\"
 num_input = 252
 n_classes = 88
 trainingPortions = 8
 validationPortions = 2
 testPortions = 0
-testLoss = []
+# testLoss = []
 validLoss = []
-testAcc = []
+# testAcc = []
 validAcc = []
 stepCount = int(math.floor(2/(512/22050.0))) # 2 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
@@ -154,8 +154,9 @@ output_logits = RNN(x, W, b, stepCount, num_hidden_units)
 y_pred = tf.nn.softmax(output_logits)
 
 # Define the loss function, optimizer, and accuracy
-loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits), axis = 0, name='loss')
+loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=output_logits), name='loss')
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
+
 # Accuracy: the percentage of individual notes it gets right.
 prediction = tf.greater(y_pred, threshold)
 accuracy = tf.metrics.accuracy(y, prediction)[1]
@@ -171,8 +172,8 @@ sess.run(init_l)
 global_step = 0
 # Number of training iterations in each epoch
 num_tr_iter = int(y_train.shape[0] / batch_size)
-for epoch in range(epochs):
-    print('Training epoch: {}'.format(epoch + 1))
+for epoch in range(1, epochs+1):
+    print('Training epoch: {}'.format(epoch))
     x_train, y_train = randomize(x_train, y_train)
     for iteration in range(num_tr_iter):
         global_step += 1
@@ -194,12 +195,11 @@ for epoch in range(epochs):
             sess.run(tf.variables_initializer(stream_vars_acc))
 
     # Run validation after every epoch
-
-    feed_dict_valid = {x: x_valid[:1000].reshape((-1, stepCount, num_input)), y: y_valid[:1000]}
+    feed_dict_valid = {x: x_valid, y: y_valid}
     loss_valid, acc_valid = sess.run([loss, accuracy], feed_dict=feed_dict_valid)
     print('---------------------------------------------------------')
     print("Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
-          format(epoch + 1, loss_valid, acc_valid))
+          format(epoch, loss_valid, acc_valid))
     print('---------------------------------------------------------')
     validLoss.append(loss_valid)
     validAcc.append(acc_valid)
@@ -209,7 +209,7 @@ for epoch in range(epochs):
 
 epochRange = np.arange(epochs)
 plt.figure(1)
-plt.plot(epochRange,testLoss,'-',label='Test Loss')
+# plt.plot(epochRange,testLoss,'-',label='Test Loss')
 plt.plot(epochRange,validLoss,'-',label='Validation Loss')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
@@ -219,7 +219,7 @@ plt.legend(loc='lower left')
 plt.show()
 
 plt.figure(2)
-plt.plot(epochRange,testAcc,'-',label='Test Accuracy')
+# plt.plot(epochRange,testAcc,'-',label='Test Accuracy')
 plt.plot(epochRange,validAcc,'-',label='Validation Accuracy')
 plt.xlabel('Epochs')
 plt.ylabel('Accuracy')
