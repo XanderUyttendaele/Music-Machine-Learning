@@ -7,13 +7,13 @@ import os.path as pt
 import math
 
 
-training_dir = "song_data\\song_data_training\\"
-target_dir = "song_data\\song_data_labeled\\"
+training_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_training\\"
+target_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\"
 num_input = 252
 n_classes = 88
 trainingPortions = 8
 validationPortions = 2
-stepCount = int(math.floor(2/(512/22050.0)))  # 2 seconds, assuming 512 hop length and 22050 rate
+stepCount = int(math.floor(0.5/(512/22050.0)))  # 2 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
 
@@ -112,8 +112,14 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # If no initial cell state is provided, they will be initialized to zero
     outputs, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
     # Linear activation, using rnn inner loop last output
-    return tf.matmul(outputs[-1], weights) + biases
+    return tf.matmul(outputs[-1], weights) + biases, current_state, lstm_cell
 
+def RNNTest(x, xsize, weights, biases, lstm_cell):
+    xsize = xsize.eval()
+    partitions = tf.range(xsize)
+    partitioned = tf.dynamic_partition(x, partitions, xsize, name='dynamic_unstack')
+    outputs, current_state = rnn.static_rnn(lstm_cell, partitioned, dtype=tf.float32)
+    return tf.map_fn(lambda x: tf.matmul(x, weights) + biases, outputs)
 
 # x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data()
@@ -126,8 +132,11 @@ num_hidden = 64         # Number of hidden units of the RNN
 
 
 def build_graph(learning_rate, num_hidden, threshold):
+    sess = tf.InteractiveSession()
     # Placeholders for inputs (x) and outputs(y)
-    x = tf.placeholder(tf.float32, shape=(None, stepCount, num_input))
+    xsize = tf.placeholder(tf.int32, name = "xsize")
+    evaluate = tf.placeholder(tf.bool, name = "evaluate")
+    x = tf.placeholder(tf.float32, shape=(None, None, num_input), name = "x")
     y = tf.placeholder(tf.float32, shape=(None, n_classes))
 
     # create weight matrix initialized randomly from N~(0, 0.01)
@@ -135,8 +144,8 @@ def build_graph(learning_rate, num_hidden, threshold):
 
     # create bias vector initialized as zero
     b = bias_variable(shape=[n_classes])
+    output_logits, current_state, lstm_cell = RNN(x, W, b, stepCount, num_hidden)
 
-    output_logits = RNN(x, W, b, stepCount, num_hidden)
     y_pred = tf.nn.sigmoid(output_logits)
 
     # Define the loss function, optimizer, and accuracy
@@ -144,22 +153,24 @@ def build_graph(learning_rate, num_hidden, threshold):
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
 
     # Accuracy: the percentage of individual notes it gets right.
-    prediction = tf.greater(y_pred, threshold)
+    prediction = tf.greater(y_pred, threshold, name = "prediction")
     accuracy = tf.metrics.accuracy(y, prediction)[1]
     precision = tf.metrics.precision(y, prediction)[1]
     recall = tf.metrics.recall(y, prediction)[1]
-    stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name
-                       or 'precision/' in v.name or 'recall/' in v.name]
-
+    stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name or 'precision/' in v.name or 'recall/' in v.name]
+    try:
+        if evaluate:
+            output = tf.map_fn(lambda a: tf.greater(a,threshold),tf.nn.sigmoid(RNNTest(x, xsize, W, b, lstm_cell)), name = "fullPrediction")
+    except:
+        pass
     # Creating the ops for initializing all variables
     init_g = tf.global_variables_initializer()
     init_l = tf.local_variables_initializer()
 
-    sess = tf.InteractiveSession()
     sess.run(init_g)
     sess.run(init_l)
 
-    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b
+    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, xsize, evaluate, x, y, W, b, current_state
 
 
 def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy, precision, recall):
@@ -171,7 +182,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
     validation_accuracies = []
     validation_precisions = []
     validation_recalls = []
-
+    saver = tf.train.Saver()
     # Number of training iterations in each epoch
     num_tr_iter = int(y_train.shape[0] / batch_size)
     for epoch in range(1, epochs+1):
@@ -184,7 +195,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
             end = (iteration + 1) * batch_size
             x_batch, y_batch = get_next_batch(x_train, y_train, start, end)
             # Run optimization op (backprop)
-            feed_dict_batch = {x: x_batch, y: y_batch}
+            feed_dict_batch = {xsize: stepCount, evaluate: False, x: x_batch, y: y_batch}
 
             # Calculate and display the batch loss and accuracy
             _, loss_batch, acc_batch, prec_batch, rec_batch = sess.run([optimizer, loss, accuracy, precision, recall], feed_dict=feed_dict_batch)
@@ -198,7 +209,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
         sess.run(tf.variables_initializer(stream_vars_acc))
 
         # Run validation after every epoch
-        feed_dict_valid = {x: x_valid, y: y_valid}
+        feed_dict_valid = {xsize: stepCount,evaluate: False,x: x_valid, y: y_valid}
         loss_valid, acc_valid, prec_valid, rec_valid = sess.run([loss, accuracy, precision, recall], feed_dict=feed_dict_valid)
         print('---------------------------------------------------------')
         print("Validation Epoch: {0}, Loss: {1:.2f}, Accuracy: {2:.01%}, Precision={3:.01%}, Recall={4:.01%}".
@@ -211,7 +222,9 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
 
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
-
+        if epoch % 10 == 0:
+            saver.save(sess, "E:\\musicdata\\Music-Machine-Learning\\saved_models\\model.ckpt")
+            print("Model saved.")
     return training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, \
            validation_accuracies, validation_precisions, validation_recalls
 
@@ -256,9 +269,12 @@ def plot_results(losses, accuracies, precisions, recalls, train_or_val):
     plt.show()
 
 
-sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b = build_graph(learning_rate, num_hidden, threshold)
+sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, xsize, evaluate, x, y, W, b, current_state = build_graph(learning_rate, num_hidden, threshold)
 training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, validation_accuracies, \
     validation_precisions, validation_recalls = train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss,
                                                       optimizer, accuracy, precision, recall)
+np.save("E:\\musicdata\\Music-Machine-Learning\\weights.npy" , W.eval())
+np.save("E:\\musicdata\\Music-Machine-Learning\\bias.npy" , b.eval())
+print("Saved weights and biases.")
 plot_results(training_loss, training_accuracies, training_precisions, training_recalls, 'Training')
 plot_results(validation_loss, validation_accuracies, validation_precisions, validation_recalls, 'Validation')
