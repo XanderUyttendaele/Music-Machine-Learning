@@ -121,8 +121,8 @@ x_train, x_valid, y_train, y_valid = load_data()
 learning_rate = 0.01    # The optimization initial learning rate
 epochs = 100            # Total number of training epochs - change back later, testing
 batch_size = 100        # Training batch size
-threshold = 0.5         # Threshold for determining a "note"
-num_hidden = 64         # Number of hidden units of the RNN
+threshold = 0.6         # Threshold for determining a "note"
+num_hidden = 256         # Number of hidden units of the RNN
 
 
 def build_graph(learning_rate, num_hidden, threshold):
@@ -161,7 +161,7 @@ def build_graph(learning_rate, num_hidden, threshold):
     sess.run(init_g)
     sess.run(init_l)
 
-    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, evaluate, x, y, W, b #, output, fullPrediction
+    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b #, output, fullPrediction
 
 
 def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy, precision, recall):
