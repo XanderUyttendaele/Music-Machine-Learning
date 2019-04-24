@@ -55,6 +55,9 @@ print("Model restored.")
 graph = tf.get_default_graph()
 x = graph.get_tensor_by_name("x:0")
 xsize = graph.get_tensor_by_name("xsize:0")
-feed_dict = {xsize:length,x:[song]}
+evaluate = graph.get_tensor_by_name("evaluate:0")
+feed_dict = {xsize:length,evaluate:True,x:[song]}
 op_to_restore = graph.get_tensor_by_name("fullPrediction:0")
 output = sess.run(op_to_restore, feed_dict)
+print(output)
+tf.map_fn(lambda a: tf.greater(a,threshold),output)

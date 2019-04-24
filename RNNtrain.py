@@ -115,17 +115,21 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     return tf.matmul(outputs[-1], weights) + biases, current_state, lstm_cell
 
 def RNNTest(x, xsize, weights, biases, lstm_cell):
-    xsize = xsize.eval()
-    partitions = tf.range(xsize)
-    partitioned = tf.dynamic_partition(x, partitions, xsize, name='dynamic_unstack')
-    outputs, current_state = rnn.static_rnn(lstm_cell, partitioned, dtype=tf.float32)
-    return tf.map_fn(lambda x: tf.matmul(x, weights) + biases, outputs)
+    try:
+        partitions = tf.range(xsize)
+        partitioned = tf.dynamic_partition(x, partitions, xsize, name='dynamic_unstack')
+        outputs, current_state = rnn.static_rnn(lstm_cell, partitioned, dtype=tf.float32)
+        return tf.map_fn(lambda x: tf.matmul(x, weights) + biases, outputs)
+    except Exception as e:
+        print("Exception!")
+        print(Exception)
+        return tf.convert_to_tensor(0.0)
 
 # x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data()
 
 learning_rate = 0.01    # The optimization initial learning rate
-epochs = 100            # Total number of training epochs
+epochs = 5              # Total number of training epochs - change back later, testing
 batch_size = 100        # Training batch size
 threshold = 0.5         # Threshold for determining a "note"
 num_hidden = 64         # Number of hidden units of the RNN
@@ -134,8 +138,8 @@ num_hidden = 64         # Number of hidden units of the RNN
 def build_graph(learning_rate, num_hidden, threshold):
     sess = tf.InteractiveSession()
     # Placeholders for inputs (x) and outputs(y)
-    xsize = tf.placeholder(tf.int32, name = "xsize")
-    evaluate = tf.placeholder(tf.bool, name = "evaluate")
+    xsize = tf.placeholder_with_default(0, shape = (), name = "xsize")
+    evaluate = tf.placeholder(tf.bool, shape = (), name = "evaluate")
     x = tf.placeholder(tf.float32, shape=(None, None, num_input), name = "x")
     y = tf.placeholder(tf.float32, shape=(None, n_classes))
 
@@ -158,11 +162,10 @@ def build_graph(learning_rate, num_hidden, threshold):
     precision = tf.metrics.precision(y, prediction)[1]
     recall = tf.metrics.recall(y, prediction)[1]
     stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name or 'precision/' in v.name or 'recall/' in v.name]
-    try:
-        if evaluate:
-            output = tf.map_fn(lambda a: tf.greater(a,threshold),tf.nn.sigmoid(RNNTest(x, xsize, W, b, lstm_cell)), name = "fullPrediction")
-    except:
-        pass
+
+    #output = tf.cond(evaluate, lambda: RNNTest(x,xsize,W,b,lstm_cell),lambda: tf.constant(0.0))
+    output = RNNTest(x, xsize, W, b, lstm_cell)
+    fullPrediction = tf.nn.sigmoid(output,name = "fullPreidction")
     # Creating the ops for initializing all variables
     init_g = tf.global_variables_initializer()
     init_l = tf.local_variables_initializer()
@@ -170,7 +173,7 @@ def build_graph(learning_rate, num_hidden, threshold):
     sess.run(init_g)
     sess.run(init_l)
 
-    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, xsize, evaluate, x, y, W, b, current_state
+    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, xsize, evaluate, x, y, W, b, current_state, output, fullPrediction
 
 
 def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, optimizer, accuracy, precision, recall):
@@ -195,7 +198,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
             end = (iteration + 1) * batch_size
             x_batch, y_batch = get_next_batch(x_train, y_train, start, end)
             # Run optimization op (backprop)
-            feed_dict_batch = {xsize: stepCount, evaluate: False, x: x_batch, y: y_batch}
+            feed_dict_batch = {xsize: stepCount, x: x_batch, y: y_batch}
 
             # Calculate and display the batch loss and accuracy
             _, loss_batch, acc_batch, prec_batch, rec_batch = sess.run([optimizer, loss, accuracy, precision, recall], feed_dict=feed_dict_batch)
@@ -269,7 +272,7 @@ def plot_results(losses, accuracies, precisions, recalls, train_or_val):
     plt.show()
 
 
-sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, xsize, evaluate, x, y, W, b, current_state = build_graph(learning_rate, num_hidden, threshold)
+sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, xsize, evaluate, x, y, W, b, current_state, output, fullPrediction = build_graph(learning_rate, num_hidden, threshold)
 training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, validation_accuracies, \
     validation_precisions, validation_recalls = train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss,
                                                       optimizer, accuracy, precision, recall)
