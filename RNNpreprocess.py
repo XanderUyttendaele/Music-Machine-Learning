@@ -10,7 +10,7 @@ bins_per_octave = 36
 num_notes = 88
 Fs = 22050
 
-def convert_to_arrays():
+def convert_to_array():
     count = 0
     for root, directories, filenames in os.walk("E:\\musicdata\\Music-Machine-Learning\\song_data\\"):
         for filename in filenames:
@@ -32,17 +32,20 @@ def convert_to_arrays():
                 note_file = open(root+"\\"+base_path+".txt")
                 for line in note_file:
                     line_data = line.split()
-                    if(line_data[0] != "OnsetTime"):
-                        begin = float(line_data[0])
-                        end = float(line_data[1])
-                        mini = 0
-                        maxi = len(sampling_vec)-1
-                        while(begin > sampling_vec[mini]):
-                            mini+= 1
-                        while(end < sampling_vec[maxi]):
-                            maxi-= 1
-                        note_pitch = int(line_data[2]) - 21
-                        note_label[mini:maxi, note_pitch] = 1
+                    try:
+                        if line_data[0] != "OnsetTime":
+                            begin = float(line_data[0])
+                            end = float(line_data[1])
+                            mini = 0
+                            maxi = len(sampling_vec)-1
+                            while(begin > sampling_vec[mini]):
+                                mini+= 1
+                            while(end < sampling_vec[maxi]):
+                                maxi-= 1
+                            note_pitch = int(line_data[2]) - 21
+                            note_label[mini:maxi, note_pitch] = 1
+                    except:
+                        pass
                 note_file.close()
                 if(not pt.isfile("E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\" + base_path + ".npy")):
                     np.save("E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\" + base_path, note_label)
