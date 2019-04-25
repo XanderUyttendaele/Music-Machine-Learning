@@ -121,8 +121,8 @@ x_train, x_valid, y_train, y_valid = load_data()
 learning_rate = 0.01    # The optimization initial learning rate
 epochs = 100            # Total number of training epochs - change back later, testing
 batch_size = 100        # Training batch size
-threshold = 0.6         # Threshold for determining a "note"
-num_hidden = 256         # Number of hidden units of the RNN
+threshold = 0.8         # Threshold for determining a "note"
+num_hidden = 64         # Number of hidden units of the RNN
 
 
 def build_graph(learning_rate, num_hidden, threshold):
