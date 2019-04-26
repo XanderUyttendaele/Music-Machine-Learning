@@ -7,16 +7,19 @@ import music21
 import librosa
 
 # TODO: more precision? can make new numpy arrays with more precise values (smaller timestep) and feed through program
-# TODO: move preprocess into this file so we can input wav directly
-# TODO: Try different precision values, also try to detect if the same note is being held but program is registering
-#  as separate notes - before quantizing, check if there are a small amount of 0s (maybe continue a few more after
-#  finding some)
+# DONE: move preprocess into this file so we can input wav directly
+# TODO: Try different precision values
+# DONE: Try to detect if the same note is being held but program is registering as separate notes - before
+#  quantizing, check if there are a small amount of 0s (maybe continue a few more after finding some)
 # TODO: Consider chord detection? Seems like certain notes are being dropped out early
-# TODO: Fix 0 length notes
+# DONE: Fix 0 length notes
+# DONE: Shift all offsets such that first note starts on beat one?
+# TODO: Dynamics, use accents to figure out time signature and start note?
 timeStep = 512/22050.0
 lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
-noteList = ["C","C#","D","D#","E","E#","F","G","G#","A","A#","B"]
+gapLength = 2
+noteList = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
 column_interval_sample = 512
 frequency_bins = 252
 bins_per_octave = 36
@@ -97,6 +100,22 @@ while i < length:
                 songData[iterator][j] = False
                 noteLength+=1
                 iterator+=1
+            # code for fixing gaps, probably not a good idea (in tests, it messed up a lot of notes that should be
+            # separate)
+            # if noteLength != 0:
+            #     oldNoteLength = noteLength
+            #     for k in range(gapLength):
+            #         if songData[iterator + gapLength - k][j]:
+            #             for l in range(gapLength - k):
+            #                 songData[iterator + l][j] = False
+            #             noteLength += gapLength - k
+            #             while songData[iterator + gapLength - k][j]:
+            #                 songData[iterator + gapLength - k][j] = False
+            #                 noteLength += 1
+            #                 iterator += 1
+            #             print("Fixed gap of length " + str(l) + " Added on " + str(noteLength-oldNoteLength) + " "
+            #                                                                                                    "timesteps")
+            #             break
             if noteLength >= lengthToIgnore:
                 processedSongData.append([j,i, (i+noteLength)]) # * timeStep])
     i+=1
@@ -119,8 +138,7 @@ if playback == 'y':
 print("Beginning beat detection")
 tt = pylab.arange(len(startCounts))
 durations = pylab.arange(1.1,30,.02) # avoid 1.0
-transform = pylab.array([fourier_transform(startCounts,d, tt)
-                    for d in durations] )
+transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations] )
 optimal_i = pylab.argmax(abs(transform))
 quarter_duration = int(durations[optimal_i])
 
@@ -145,6 +163,9 @@ for note in processedSongData:
     shift += note[1] - temp
     temp = note[2]
     note[2] = closest(note[2], quarter_duration/precision)
+    if note[2] == note[1]:
+        note[2] += quarter_duration/precision
+        print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/(quarter_duration)))
     # int((note[2]//(quarter_duration/precision))*(quarter_duration/precision))
     shift += note[2] - temp
 shift /= (len(processedSongData)*2)
@@ -160,9 +181,15 @@ right = [music21.stream.Part()]
 curRight = 0
 left = [music21.stream.Part()]
 curLeft = 0
+least = 0
 for a in range(length):
     for c in range(len(processedSongData)):
         if processedSongData[c][1] == a:
+            # shift all notes so first note is at 0
+            if least == 0:
+                least = a
+            processedSongData[c][2] -= least
+            processedSongData[c][1] -= least
             octave = (processedSongData[c][0]+9)//12
             temp = noteList[processedSongData[c][0] + 9 - octave * 12]
             toAppend = music21.note.Note(temp+str(octave))
@@ -191,4 +218,6 @@ for part in left:
 score.append(tempoMarking)
 score.insert(0, rightScore.chordify())
 score.insert(0, leftScore.chordify())
+keySig = score.analyze('key')
+score.insert(0, keySig)
 score.show()
