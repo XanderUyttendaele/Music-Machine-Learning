@@ -7,8 +7,13 @@ import music21
 
 # TODO: more precision? can make new numpy arrays with more precise values (smaller timestep) and feed through program
 # TODO: move preprocess into this file so we can input wav directly
+# TODO: Try different precision values, also try to detect if the same note is being held but program is registering
+#  as separate notes - before quantizing, check if there are a small amount of 0s (maybe continue a few more after
+#  finding some)
+# TODO: Consider chord detection? Seems like certain notes are being dropped out early
+# TODO: Fix 0 length notes
 timeStep = 512/22050.0
-lengthToIgnore = 5 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
+lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
 noteList = ["C","C#","D","D#","E","E#","F","G","G#","A","A#","B"]
 
@@ -37,9 +42,6 @@ def play():
     pygame.midi.quit()
 
 def fourier_transform(signal, period, tt):
-    """ See http://en.wikipedia.org/wiki/Fourier_transform
-    I could also have used Numpy's fft.
-    """
     f = lambda func : (signal*func(2*pylab.pi*tt/period)).sum()
     return f(pylab.cos)+ 1j*f(pylab.sin)
 
@@ -63,7 +65,7 @@ print("Model restored.")
 graph = tf.get_default_graph()
 x = graph.get_tensor_by_name("x:0")
 op = graph.get_tensor_by_name("prediction:0")
-song_name = input("Song file name: ")
+song_name = input("Song file name (npy): ")
 song = pylab.load("E:\\musicdata\\Music-Machine-Learning\\song_data_training\\" + song_name)
 length = song.shape[0]
 labels = pylab.load("E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\" + song_name)
@@ -138,7 +140,7 @@ pylab.show()
 print("Estimated tempo (bpm): " + '%.3f' % (60.0/(quarter_duration * timeStep)))
 
 print("Shifting notes to tempo")
-precision = 4 # how many parts to split a quarter note into
+precision = 2 # how many parts to split a quarter note into
 length *= precision
 timeStep /= precision
 quarter_duration *= precision
@@ -161,6 +163,7 @@ playback = input("Play predictions? (y/n)")
 if playback == 'y':
     play()
 print("Beginning sheet music generation - generating notes")
+tempoMarking = music21.tempo.MetronomeMark(number=int(60.0/(quarter_duration * timeStep)))
 score = music21.stream.Score()
 right = [music21.stream.Part()]
 curRight = 0
@@ -176,14 +179,12 @@ for a in range(length):
             if processedSongData[c][0]>=39:
                 if curRight >= len(right):
                     right.append(music21.stream.Part())
-                right[curRight].append(toAppend)
-                right[curRight][-1].offset = processedSongData[c][1]/quarter_duration
+                right[curRight].insert(processedSongData[c][1]/quarter_duration,toAppend)
                 curRight+=1
             else:
                 if curLeft >= len(left):
                     left.append(music21.stream.Part())
-                left[curLeft].append(toAppend)
-                left[curLeft][-1].offset = processedSongData[c][1]/quarter_duration
+                left[curLeft].insert(processedSongData[c][1]/quarter_duration,toAppend)
                 curLeft+=1
         if processedSongData[c][2] == a:
             if processedSongData[c][0]>=39:
@@ -196,6 +197,7 @@ for part in right:
     rightScore.insert(0, part)
 for part in left:
     leftScore.insert(0, part)
+score.append(tempoMarking)
 score.insert(0, rightScore.chordify())
 score.insert(0, leftScore.chordify())
 score.show()
