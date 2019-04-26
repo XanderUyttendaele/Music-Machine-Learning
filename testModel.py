@@ -1,9 +1,10 @@
 import tensorflow as tf
-import random
+import numpy as np
 import pygame.midi
 import time
 import pylab
 import music21
+import librosa
 
 # TODO: more precision? can make new numpy arrays with more precise values (smaller timestep) and feed through program
 # TODO: move preprocess into this file so we can input wav directly
@@ -16,7 +17,11 @@ timeStep = 512/22050.0
 lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
 noteList = ["C","C#","D","D#","E","E#","F","G","G#","A","A#","B"]
-
+column_interval_sample = 512
+frequency_bins = 252
+bins_per_octave = 36
+keyCount = 88
+Fs = 22050
 songData = []
 
 def play():
@@ -65,11 +70,11 @@ print("Model restored.")
 graph = tf.get_default_graph()
 x = graph.get_tensor_by_name("x:0")
 op = graph.get_tensor_by_name("prediction:0")
-song_name = input("Song file name (npy): ")
-song = pylab.load("E:\\musicdata\\Music-Machine-Learning\\song_data_training\\" + song_name)
+song_name = input("Song file name (wav): ")
+components, rate = librosa.load(song_name)
+song = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample,n_bins = frequency_bins,
+                         bins_per_octave = bins_per_octave)).transpose()
 length = song.shape[0]
-labels = pylab.load("E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\" + song_name)
-keyCount = labels.shape[1]
 print("Song loaded.")
 print("Begin processing:")
 bottomNotesCorrect = 0
@@ -77,21 +82,7 @@ bottomNotesTotal = 0
 for i in range(length):
     feed_dict = {x:[[song[i] for a in range(21)]]}
     songData.append(sess.run(op, feed_dict)[0])
-    for j in range(keyCount):
-        if labels[i][j]:
-            if songData[i][j]:
-                bottomNotesCorrect += 1
-            bottomNotesTotal += 1
-            break
 print("Done processing " + str(length) + " timesteps")
-print("Bottom note precision: " + str(bottomNotesCorrect) + " / " + str(bottomNotesTotal))
-print("Picking random test")
-
-index = random.randint(0, length-1)
-print("Timestep: " + str(index))
-print("Actual notes: " + str([i for i, e in enumerate(labels[index].tolist()) if e == 1.0]))
-print("Predictions: " + str([i for i, e in enumerate(songData[index]) if e]))
-time.sleep(5)
 print("Converting to start/end format") # list of lists in format [note, start time, stop time]
 processedSongData = []
 songData.append([False]*keyCount)
