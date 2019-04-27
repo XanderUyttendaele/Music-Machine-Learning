@@ -102,26 +102,29 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # Required shape: 'timesteps' tensors list of shape (batch_size, n_input)
 
     # Unstack to get a list of 'timesteps' tensors of shape (batch_size, n_input)
-    x = tf.unstack(x, timesteps, 1)
+    # x = tf.unstack(x, timesteps, 1)
 
     # Define a rnn cell with tensorflow
-    lstm_cell = rnn.LSTMCell(num_hidden)
+    lstm_cell_fw = rnn.LSTMCell(num_hidden)
+    lstm_cell_bw = rnn.LSTMCell(num_hidden)
 
     # Get lstm cell output
     # If no initial_state is provided, dtype must be specified
     # If no initial cell state is provided, they will be initialized to zero
-    outputs, current_state = rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
+    outputs, output_states = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, lstm_cell_bw, x, dtype=tf.float32)
     # Linear activation, using rnn inner loop last output
-    return tf.matmul(outputs[-1], weights) + biases
+    output_fw = tf.matmul(outputs[0][-1], weights) + biases
+    output_bw = tf.matmul(outputs[1][-1], weights) + biases
+    return tf.math.divide(tf.math.add(output_fw, output_bw),2)
 
 
 # x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data()
 
-learning_rate = 0.01    # The optimization initial learning rate
-epochs = 100            # Total number of training epochs - change back later, testing
-batch_size = 100        # Training batch size
-threshold = 0.8         # Threshold for determining a "note"
+learning_rate = 0.006    # The optimization initial learning rate
+epochs = 100             # Total number of training epochs - change back later, testing
+batch_size = 20          # Training batch size
+threshold = 0.5          # Threshold for determining a "note"
 num_hidden = 256         # Number of hidden units of the RNN
 
 
