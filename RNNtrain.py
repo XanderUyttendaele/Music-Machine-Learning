@@ -119,7 +119,8 @@ learning_rate = 0.01    # The optimization initial learning rate
 epochs = 50             # Total number of training epochs - change back later, testing
 batch_size = 100        # Training batch size
 threshold = 0.8         # Threshold for determining a "note"
-num_hidden = 128        # Number of hidden units of the RNN
+num_hidden = 256         # Number of hidden units of the RNN
+
 
 
 def build_graph(learning_rate, num_hidden, threshold):
