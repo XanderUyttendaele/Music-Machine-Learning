@@ -10,17 +10,17 @@ lengthToIgnore = 4 # ignore notes of this length or shorter
 songData = []
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("E:\\musicdata\\Music-Machine-Learning\\saved_models\\model.ckpt.meta")
-saver.restore(sess, tf.train.latest_checkpoint("E:\\musicdata\\Music-Machine-Learning\\saved_models\\"))
+saver = tf.train.import_meta_graph("saved_models\\model.ckpt.meta")
+saver.restore(sess, "saved_models\\model_50000_128.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
 x = graph.get_tensor_by_name("x:0")
 op = graph.get_tensor_by_name("prediction:0")
 song_name = input("Song file name: ")
-song = np.load("E:\\musicdata\\Music-Machine-Learning\\song_data_training\\" + song_name)
+song = np.load("song_data\\song_data_training\\" + song_name)
 length = song.shape[0]
-labels = np.load("E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\" + song_name)
+labels = np.load("song_data\\song_data_labeled\\" + song_name)
 keyCount = labels.shape[1]
 print("Song loaded.")
 print("Begin processing:")
