@@ -3,7 +3,7 @@ import time
 timeStep = 512/22050.0
 lengthToIgnore = 5 # ignore notes of this length or shorter
 song_name = input("Song file name: ")
-song = open("E:\\musicdata\\Music-Machine-Learning\\song_data\\" + song_name)
+song = open("song_data\\" + song_name) # this isn't working for me...
 lineCount = 0
 playArray = []
 final = 0.0

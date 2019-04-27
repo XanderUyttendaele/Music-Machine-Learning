@@ -66,8 +66,8 @@ def closest(input, step):
     return multiple * step
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("E:\\musicdata\\Music-Machine-Learning\\saved_models\\model.ckpt.meta")
-saver.restore(sess, tf.train.latest_checkpoint("E:\\musicdata\\Music-Machine-Learning\\saved_models\\"))
+saver = tf.train.import_meta_graph("saved_models\\model.ckpt.meta")
+saver.restore(sess, "saved_models\\model_50000_128.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
@@ -78,6 +78,7 @@ components, rate = librosa.load(song_name)
 song = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample,n_bins = frequency_bins,
                          bins_per_octave = bins_per_octave)).transpose()
 length = song.shape[0]
+
 print("Song loaded.")
 print("Begin processing:")
 bottomNotesCorrect = 0
