@@ -7,55 +7,52 @@ import os.path as pt
 import math
 
 
-training_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_training\\"
-target_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\"
+training_dir = "song_data\\song_data_training\\"
+target_dir = "song_data\\song_data_labeled\\"
 num_input = 252
 n_classes = 88
 trainingPortions = 8
 validationPortions = 2
-stepCount = int(math.floor(0.5/(512/22050.0)))  # 2 seconds, assuming 512 hop length and 22050 rate
+stepCount = int(math.floor(0.5/(512/22050.0)))  # 0.5 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
 
-def load_data():
-    clipCount = 0
-    for root, directories, filenames in os.walk(training_dir):
-        for filename in filenames:
-            file_path = pt.join(root, filename)
-            temp = np.load(file_path)
-            clipCount += int(math.floor(temp.shape[0]/stepCount))
-
-    noteData = np.empty([clipCount, stepCount, num_input])
-    noteTargets = np.empty([clipCount, n_classes])
+def load_data(size):
+    noteData = np.empty([size, stepCount, num_input])
+    noteTargets = np.empty([size, n_classes])
 
     x = 0
     for root, directories, filenames in os.walk(training_dir):
         for filename in filenames:
-            file_path = pt.join(root, filename)
-            temp = np.load(file_path)
-            clips = int(math.floor(temp.shape[0]/stepCount))
-            for i in range(0, clips):
-                noteData[x] = temp[stepCount*i:stepCount*(i+1)]
-                x += 1
+            if x < size:
+                file_path = pt.join(root, filename)
+                temp = np.load(file_path)
+                clips = int(math.floor(temp.shape[0]/stepCount))
+                for i in range(0, clips):
+                    if x < size:
+                        noteData[x] = temp[stepCount*i:stepCount*(i+1)]
+                        x += 1
 
     x = 0
     for root, directories, filenames in os.walk(target_dir):
         for filename in filenames:
-            file_path = pt.join(root, filename)
-            temp = np.load(file_path)
-            clips = int(math.floor(temp.shape[0]/stepCount))
-            for i in range(0, clips):
-                noteTargets[x] = temp[stepCount*(i+1)-1]
-                x+=1
-    portionSize = clipCount // 10
+            if x < size:
+                file_path = pt.join(root, filename)
+                temp = np.load(file_path)
+                clips = int(math.floor(temp.shape[0]/stepCount))
+                for i in range(0, clips):
+                    if x < size:
+                        noteTargets[x] = temp[stepCount*(i+1)-1]
+                        x+=1
+    portionSize = size / 10
 
     # different pianos, do this to ensure we're not fitting to a single piano
     noteData, noteTargets = randomize(noteData, noteTargets)
-    trainingData = noteData[:portionSize * trainingPortions]
-    validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
+    trainingData = noteData[:int(portionSize * trainingPortions)]
+    validationData = noteData[int(portionSize * trainingPortions):int(portionSize * (trainingPortions + validationPortions)):]
 
-    trainingTargets = noteTargets[:portionSize * trainingPortions]
-    validationTargets = noteTargets[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
+    trainingTargets = noteTargets[:int(portionSize * trainingPortions)]
+    validationTargets = noteTargets[int(portionSize * trainingPortions):int(portionSize * (trainingPortions + validationPortions)):]
 
     return trainingData, validationData, trainingTargets, validationTargets
 
@@ -116,13 +113,13 @@ def RNN(x, weights, biases, timesteps, num_hidden):
 
 
 # x is for data, y is for targets
-x_train, x_valid, y_train, y_valid = load_data()
+x_train, x_valid, y_train, y_valid = load_data(50000)
 
 learning_rate = 0.01    # The optimization initial learning rate
-epochs = 100            # Total number of training epochs - change back later, testing
+epochs = 50             # Total number of training epochs - change back later, testing
 batch_size = 100        # Training batch size
 threshold = 0.8         # Threshold for determining a "note"
-num_hidden = 64         # Number of hidden units of the RNN
+num_hidden = 128        # Number of hidden units of the RNN
 
 
 def build_graph(learning_rate, num_hidden, threshold):
@@ -214,7 +211,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
         if epoch % 10 == 0:
-            saver.save(sess, "E:\\musicdata\\Music-Machine-Learning\\saved_models\\model.ckpt")
+            saver.save(sess, "\\saved_models\\model_50000_128.ckpt")
             print("Model saved.")
     return training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, \
            validation_accuracies, validation_precisions, validation_recalls
@@ -264,8 +261,8 @@ sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall,
 training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, validation_accuracies, \
     validation_precisions, validation_recalls = train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss,
                                                       optimizer, accuracy, precision, recall)
-np.save("E:\\musicdata\\Music-Machine-Learning\\weights.npy" , W.eval())
-np.save("E:\\musicdata\\Music-Machine-Learning\\bias.npy" , b.eval())
+np.save("weights_50000_128.npy" , W.eval())
+np.save("bias_50000_128.npy" , b.eval())
 print("Saved weights and biases.")
 plot_results(training_loss, training_accuracies, training_precisions, training_recalls, 'Training')
 plot_results(validation_loss, validation_accuracies, validation_precisions, validation_recalls, 'Validation')
