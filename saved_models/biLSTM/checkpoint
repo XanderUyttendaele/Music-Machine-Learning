@@ -1,0 +1,2 @@
+model_checkpoint_path: "E:\\music\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM.ckpt"
+all_model_checkpoint_paths: "E:\\music\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM.ckpt"
