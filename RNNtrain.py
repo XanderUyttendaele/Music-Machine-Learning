@@ -7,8 +7,8 @@ import os.path as pt
 import math
 
 
-training_dir = "song_data\\song_data_training\\"
-target_dir = "song_data\\song_data_labeled\\"
+training_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_training\\"
+target_dir = "E:\\musicdata\\Music-Machine-Learning\\song_data_labeled\\"
 num_input = 252
 n_classes = 88
 trainingPortions = 8
@@ -16,46 +16,47 @@ validationPortions = 2
 stepCount = int(math.floor(0.5/(512/22050.0)))  # 0.5 seconds, assuming 512 hop length and 22050 rate
 keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
+def load_data():
+    clipCount = 0
+    for root, directories, filenames in os.walk(training_dir):
+        for filename in filenames:
+            file_path = pt.join(root, filename)
+            temp = np.load(file_path)
+            clipCount += int(math.floor(temp.shape[0]/stepCount))
 
-def load_data(size):
-    noteData = np.empty([size, stepCount, num_input])
-    noteTargets = np.empty([size, n_classes])
+    noteData = np.empty([clipCount, stepCount, num_input])
+    noteTargets = np.empty([clipCount, stepCount, n_classes])
 
     x = 0
     for root, directories, filenames in os.walk(training_dir):
         for filename in filenames:
-            if x < size:
-                file_path = pt.join(root, filename)
-                temp = np.load(file_path)
-                clips = int(math.floor(temp.shape[0]/stepCount))
-                for i in range(0, clips):
-                    if x < size:
-                        noteData[x] = temp[stepCount*i:stepCount*(i+1)]
-                        x += 1
+            file_path = pt.join(root, filename)
+            temp = np.load(file_path)
+            clips = int(math.floor(temp.shape[0]/stepCount))
+            for i in range(0, clips):
+                noteData[x] = temp[stepCount*i:stepCount*(i+1)]
+                x += 1
 
     x = 0
     for root, directories, filenames in os.walk(target_dir):
         for filename in filenames:
-            if x < size:
-                file_path = pt.join(root, filename)
-                temp = np.load(file_path)
-                clips = int(math.floor(temp.shape[0]/stepCount))
-                for i in range(0, clips):
-                    if x < size:
-                        noteTargets[x] = temp[stepCount*(i+1)-1]
-                        x+=1
-    portionSize = size / 10
+            file_path = pt.join(root, filename)
+            temp = np.load(file_path)
+            clips = int(math.floor(temp.shape[0]/stepCount))
+            for i in range(0, clips):
+                noteTargets[x] = temp[stepCount*i:stepCount*(i+1)]
+                x+=1
+    portionSize = clipCount // 10
 
     # different pianos, do this to ensure we're not fitting to a single piano
     noteData, noteTargets = randomize(noteData, noteTargets)
-    trainingData = noteData[:int(portionSize * trainingPortions)]
-    validationData = noteData[int(portionSize * trainingPortions):int(portionSize * (trainingPortions + validationPortions)):]
+    trainingData = noteData[:portionSize * trainingPortions]
+    validationData = noteData[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
 
-    trainingTargets = noteTargets[:int(portionSize * trainingPortions)]
-    validationTargets = noteTargets[int(portionSize * trainingPortions):int(portionSize * (trainingPortions + validationPortions)):]
+    trainingTargets = noteTargets[:portionSize * trainingPortions]
+    validationTargets = noteTargets[portionSize * trainingPortions:portionSize * (trainingPortions + validationPortions):]
 
     return trainingData, validationData, trainingTargets, validationTargets
-
 
 def randomize(x, y):
     permutation = np.random.permutation(y.shape[0])
@@ -109,20 +110,25 @@ def RNN(x, weights, biases, timesteps, num_hidden):
     # If no initial_state is provided, dtype must be specified
     # If no initial cell state is provided, they will be initialized to zero
     outputs, output_states = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, lstm_cell_bw, x, dtype=tf.float32)
-    # Linear activation, using rnn inner loop last output
-    output_fw = tf.matmul(outputs[0][-1], weights) + biases
-    output_bw = tf.matmul(outputs[1][-1], weights) + biases
+
+    def temp(input):
+        return tf.matmul(input, weights) + biases
+
+    # current format: [batch_size, timesteps, num_hidden]
+
+    output_fw = tf.map_fn(temp, outputs[0])
+    output_bw = tf.map_fn(temp, outputs[1])
     return tf.math.divide(tf.math.add(output_fw, output_bw),2)
 
 
 # x is for data, y is for targets
-x_train, x_valid, y_train, y_valid = load_data(50000)
+x_train, x_valid, y_train, y_valid = load_data()
 
 learning_rate = 0.01    # The optimization initial learning rate
 epochs = 50             # Total number of training epochs - change back later, testing
-batch_size = 100        # Training batch size
-threshold = 0.8         # Threshold for determining a "note"
-num_hidden = 256         # Number of hidden units of the RNN
+batch_size = 100         # Training batch size
+threshold = 0.5         # Threshold for determining a "note"
+num_hidden = 256        # Number of hidden units of the RNN
 
 
 
@@ -130,7 +136,7 @@ def build_graph(learning_rate, num_hidden, threshold):
     sess = tf.InteractiveSession()
     # Placeholders for inputs (x) and outputs(y)
     x = tf.placeholder(tf.float32, shape=(None, None, num_input), name = "x")
-    y = tf.placeholder(tf.float32, shape=(None, n_classes))
+    y = tf.placeholder(tf.float32, shape=(None, None, n_classes))
 
     # create weight matrix initialized randomly from N~(0, 0.01)
     W = weight_variable(shape=[num_hidden, n_classes])
@@ -188,7 +194,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
             x_batch, y_batch = get_next_batch(x_train, y_train, start, end)
             # Run optimization op (backprop)
             feed_dict_batch = {x: x_batch, y: y_batch}
-
+            print("Feeding batch " + str(iteration))
             # Calculate and display the batch loss and accuracy
             _, loss_batch, acc_batch, prec_batch, rec_batch = sess.run([optimizer, loss, accuracy, precision, recall], feed_dict=feed_dict_batch)
         training_loss.append(loss_batch)  # Loss for just last batch
@@ -215,7 +221,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
         if epoch % 10 == 0:
-            saver.save(sess, "\\saved_models\\model_50000_128.ckpt")
+            saver.save(sess, "\\saved_models\\biLSTM\\model_biLSTM.ckpt")
             print("Model saved.")
     return training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, \
            validation_accuracies, validation_precisions, validation_recalls
@@ -265,8 +271,8 @@ sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall,
 training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, validation_accuracies, \
     validation_precisions, validation_recalls = train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss,
                                                       optimizer, accuracy, precision, recall)
-np.save("weights_50000_128.npy" , W.eval())
-np.save("bias_50000_128.npy" , b.eval())
+np.save("weights_biLSTM.npy" , W.eval())
+np.save("bias_biLSTM.npy" , b.eval())
 print("Saved weights and biases.")
 plot_results(training_loss, training_accuracies, training_precisions, training_recalls, 'Training')
 plot_results(validation_loss, validation_accuracies, validation_precisions, validation_recalls, 'Validation')
