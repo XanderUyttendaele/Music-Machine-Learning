@@ -5,16 +5,23 @@ import time
 import pylab
 import music21
 import librosa
+import copy
 
 # TODO: more precision? can make new numpy arrays with more precise values (smaller timestep) and feed through program
 # DONE: move preprocess into this file so we can input wav directly
-# TODO: Try different precision values
-# DONE: Try to detect if the same note is being held but program is registering as separate notes - before
+# TODO: Try to detect if the same note is being held but program is registering as separate notes - before
 #  quantizing, check if there are a small amount of 0s (maybe continue a few more after finding some)
-# TODO: Consider chord detection? Seems like certain notes are being dropped out early
+#  After finding a note, maybe more than 5 steps, check for gap?
+# TODO: Try other quantization methods
+# TODO: Consider chord detection? Seems like certain notes are being dropped out early - if two notes are being
+#  played together, continue all of them that started at the same time or end at the same time?
+# TODO: Overlap of different notes & what to do about it - it rarely happens in music
 # DONE: Fix 0 length notes
 # DONE: Shift all offsets such that first note starts on beat one?
 # TODO: Dynamics, use accents to figure out time signature and start note?
+# TODO: Determine precision based on number of halves of peak above mean or some other measure
+# TODO: Try different precision values
+# NOTE: is quarterduration right?? seems to be too slow for twinkle
 timeStep = 512/22050.0
 lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
@@ -88,6 +95,7 @@ for i in range(length):
 print("Done processing " + str(length) + " timesteps")
 print("Converting to start/end format") # list of lists in format [note, start time, stop time]
 processedSongData = []
+unchangedSongData = copy.deepcopy(songData)
 songData.append([False]*keyCount)
 i = 0
 j = 0
@@ -113,8 +121,7 @@ while i < length:
             #                 songData[iterator + gapLength - k][j] = False
             #                 noteLength += 1
             #                 iterator += 1
-            #             print("Fixed gap of length " + str(l) + " Added on " + str(noteLength-oldNoteLength) + " "
-            #                                                                                                    "timesteps")
+            #             print("Fixed gap of length " + str(l) + " Added on " + str(noteLength-oldNoteLength) + " timesteps")
             #             break
             if noteLength >= lengthToIgnore:
                 processedSongData.append([j,i, (i+noteLength)]) # * timeStep])
@@ -140,8 +147,7 @@ tt = pylab.arange(len(startCounts))
 durations = pylab.arange(1.1,30,.02) # avoid 1.0
 transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations] )
 optimal_i = pylab.argmax(abs(transform))
-quarter_duration = int(durations[optimal_i])
-
+quarter_duration = int(round(durations[optimal_i]))
 pylab.plot(durations, abs(transform))
 pylab.xlabel('period (in timesteps)')
 pylab.ylabel('Spectrum value')
@@ -157,20 +163,32 @@ processedSongData = [[note[0],note[1]*precision,note[2]*precision]for note in pr
 shift = 0
 for note in processedSongData:
     temp = note[1]
-    note[1] = closest(note[1], quarter_duration/precision)
-    # int((note[1]//(quarter_duration/precision))*(quarter_duration/precision)) does it make more sense to use closest or just floor - if there's
-    # a note in the middle of two 16ths or w/e do we assume it started at the previous 16th?
-    shift += note[1] - temp
-    temp = note[2]
+    temptwo = note[2]
+    note[1] = note[1] - note[1] % (quarter_duration/precision)
+    # note[2] = note[2] - note[2] % (quarter_duration/precision)
+    # note[1] = closest(note[1], quarter_duration/precision)
+    # # int((note[1]//(quarter_duration/precision))*(quarter_duration/precision)) does it make more sense to use closest or just floor - if there's
+    # # a note in the middle of two 16ths or w/e do we assume it started at the previous 16th?
     note[2] = closest(note[2], quarter_duration/precision)
-    if note[2] == note[1]:
-        note[2] += quarter_duration/precision
-        print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/(quarter_duration)))
-    # int((note[2]//(quarter_duration/precision))*(quarter_duration/precision))
-    shift += note[2] - temp
+    # if note[2] == note[1]:
+    #     if temptwo - note[2] > note[1] - temp:
+    #         note[2] += quarter_duration/precision
+    #     else:
+    #         note[1] -= quarter_duration/precision
+    #     print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/(quarter_duration)))
+    # # int((note[2]//(quarter_duration/precision))*(quarter_duration/precision))
+    shift += note[1] - temp
+    shift += note[2] - temptwo
 shift /= (len(processedSongData)*2)
 shift *= timeStep
 print("Average shift (seconds): " + '%.3f' % shift)
+# make sure they're not overlapping
+lastPosNotes = [0]*88
+for note in processedSongData:
+    if lastPosNotes[note[0]] > note[1]:
+        print("Shifted")
+        note[1] = lastPosNotes[note[0]]
+    lastPosNotes[note[0]] = note[2]
 playback = input("Play predictions? (y/n)")
 if playback == 'y':
     play()
@@ -209,6 +227,7 @@ for a in range(length):
                 curRight-=1
             else:
                 curLeft-=1
+
 rightScore = music21.stream.Score()
 leftScore = music21.stream.Score()
 for part in right:
