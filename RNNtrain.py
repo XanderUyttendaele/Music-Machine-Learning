@@ -94,7 +94,7 @@ def bias_variable(shape):
                            initializer=initial)
 
 
-def RNN(x, weights, biases, timesteps, num_hidden):
+def RNN(x, weights, biases, num_hidden):
     # Prepare data shape to match `rnn` function requirements
     # Current data input shape: (batch_size, timesteps, n_input)
     # Required shape: 'timesteps' tensors list of shape (batch_size, n_input)
@@ -143,7 +143,7 @@ def build_graph(learning_rate, num_hidden, threshold):
 
     # create bias vector initialized as zero
     b = bias_variable(shape=[n_classes])
-    output_logits = RNN(x, W, b, stepCount, num_hidden)
+    output_logits = RNN(x, W, b, num_hidden)
     # output = RNNTest(x, W, b, lstm_cell)
 
     y_pred = tf.nn.sigmoid(output_logits)
