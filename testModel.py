@@ -6,6 +6,7 @@ import pylab
 import music21
 import librosa
 import math
+import copy
 
 # TODO: more precision? can make new numpy arrays with more precise values (smaller timestep) and feed through program
 # DONE: move preprocess into this file so we can input wav directly
@@ -17,7 +18,7 @@ import math
 # DONE: Shift all offsets such that first note starts on beat one?
 # TODO: Dynamics, use accents to figure out time signature and start note?
 timeStep = 512/22050.0
-lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
+lengthToIgnore = 0 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
 gapLength = 2
 noteList = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
@@ -26,7 +27,6 @@ frequency_bins = 252
 bins_per_octave = 36
 keyCount = 88
 Fs = 22050
-songData = []
 stepCount = int(math.floor(0.5/(512/22050.0)))
 
 def play():
@@ -68,8 +68,8 @@ def closest(input, step):
     return multiple * step
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("E:\\music\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM.ckpt.meta")
-saver.restore(sess, "E:\\music\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM.ckpt")
+saver = tf.train.import_meta_graph("E:\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM.ckpt.meta")
+saver.restore(sess, "E:\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
@@ -85,10 +85,17 @@ print("Song loaded.")
 print("Begin processing:")
 bottomNotesCorrect = 0
 bottomNotesTotal = 0
-for i in range(length//21):
+offset = length % stepCount
+songData = [0]*length
+for i in range(length//stepCount):
     feed_dict = {x:[song[i * stepCount: (i+1) * stepCount]]}
+    output = sess.run(op, feed_dict)
     for j in range(stepCount):
-        songData.append(sess.run(op, feed_dict)[0][j])
+        songData[i*stepCount + j] = output[0][j]
+    feed_dict = {x:[song[i * stepCount + offset: (i+1) * stepCount + offset]]}
+    output = sess.run(op, feed_dict)
+    for j in range(stepCount):
+        songData[i*stepCount + j + offset] = output[0][j]
 print("Done processing " + str(length) + " timesteps")
 print("Converting to start/end format") # list of lists in format [note, start time, stop time]
 processedSongData = []
@@ -101,10 +108,20 @@ while i < length:
         if songData[i][j]:
             noteLength = 0
             iterator = i
+            count = 0
             while songData[iterator][j]:
-                songData[iterator][j] = False
-                noteLength+=1
-                iterator+=1
+                if not songData[iterator][j]:
+                    if count > int(lengthToIgnore//2) and True in songData[iterator+1:iterator+lengthToIgnore//3+ 1][j]:
+                        print("Bridging gap!")
+                        count = 0
+                        noteLength +=1
+                        iterator +=1
+                        continue
+                else:
+                    songData[iterator][j] = False
+                    noteLength+=1
+                    iterator+=1
+                    count+=1
             # code for fixing gaps, probably not a good idea (in tests, it messed up a lot of notes that should be
             # separate)
             # if noteLength != 0:
@@ -142,9 +159,16 @@ if playback == 'y':
 print("Beginning beat detection")
 tt = pylab.arange(len(startCounts))
 durations = pylab.arange(1.1,30,.02) # avoid 1.0
-transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations] )
-optimal_i = pylab.argmax(abs(transform))
-quarter_duration = int(round(durations[optimal_i]))
+transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations])
+# not working sometimes, maybe because many large values close to spike?
+spikeCount = len([i for i in abs(transform) if i > 0.75 * pylab.argmax(abs(transform))])
+if spikeCount == 1:
+    top_k = np.array([pylab.argmax(abs(transform)),pylab.argmax(abs(transform))])
+else:
+    top_k = pylab.argpartition(abs(transform), -2)[-2:]
+    top_k = np.sort(top_k)
+# should be getting the larger of the 2
+quarter_duration = int(round(durations[top_k[1]]))
 
 pylab.plot(durations, abs(transform))
 pylab.xlabel('period (in timesteps)')
@@ -153,7 +177,8 @@ pylab.show()
 print("Estimated tempo (bpm): " + '%.3f' % (60.0/(quarter_duration * timeStep)))
 
 print("Shifting notes to tempo")
-precision = 2 # how many parts to split a quarter note into
+precision = int(round(top_k[1]/top_k[0])) # how many parts to split a quarter note into
+print("Shifting notes to 1/" + str(precision) + " of a quarter")
 length *= precision
 timeStep /= precision
 quarter_duration *= precision
@@ -163,7 +188,8 @@ for note in processedSongData:
     temp = note[1]
     temptwo = note[2]
     note[1] = note[1] - note[1] % (quarter_duration/precision)
-    note[2] = closest(note[2], quarter_duration/precision)
+    note[2] = note[2] + quarter_duration/precision - note[2] % (quarter_duration/precision)
+    # note[2] = closest(note[2], quarter_duration/precision)
     # int((note[1]//(quarter_duration/precision))*(quarter_duration/precision)) does it make more sense to use closest or just floor - if there's
     # a note in the middle of two 16ths or w/e do we assume it started at the previous 16th?
     shift += note[1] - temp
@@ -180,7 +206,6 @@ print("Average shift (seconds): " + '%.3f' % shift)
 lastPosNotes = [0]*88
 for note in processedSongData:
     if lastPosNotes[note[0]] > note[1]:
-        print("Shifted")
         note[1] = lastPosNotes[note[0]]
     lastPosNotes[note[0]] = note[2]
 playback = input("Play predictions? (y/n)")
@@ -223,13 +248,29 @@ for a in range(length):
                 curLeft-=1
 rightScore = music21.stream.Score()
 leftScore = music21.stream.Score()
+rightLength = rightScore.quarterLength
+leftLength = leftScore.quarterLength
 for part in right:
     rightScore.insert(0, part)
 for part in left:
     leftScore.insert(0, part)
+# making them all end with full measures
+rightRest = music21.note.Rest()
+rightRest.duration.quarterLength = 4.0 - rightLength % 4
+rightScore.append(rightRest)
+leftRest = music21.note.Rest()
+leftRest.duration.quarterLength = 4.0 - leftLength % 4
+leftScore.append(leftRest)
+fullRest = music21.note.Rest()
+fullRest.duration.quarterLength = 4.0
+while leftScore.quarterLength > rightScore.quarterLength:
+    rightScore.append(fullRest)
+while rightScore.quarterLength > leftScore.quarterLength:
+    leftScore.append(fullRest)
 score.append(tempoMarking)
 score.insert(0, rightScore.chordify())
 score.insert(0, leftScore.chordify())
 keySig = score.analyze('key')
-score.insert(0, keySig)
+score.keySignature = keySig
+score.timeSignature = music21.TimeSignature("")
 score.show()
