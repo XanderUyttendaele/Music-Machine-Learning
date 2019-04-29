@@ -125,11 +125,11 @@ def RNN(x, weights, biases, num_hidden):
 # x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data()
 
-learning_rate = 0.005   # The optimization initial learning rate
-epochs = 100            # Total number of training epochs - change back later, testing
-batch_size = 10         # Training batch size
+learning_rate = 0.01   # The optimization initial learning rate
+epochs = 50            # Total number of training epochs - change back later, testing
+batch_size = 50         # Training batch size
 threshold = 0.5         # Threshold for determining a "note"
-num_hidden = 256        # Number of hidden units of the RNN
+num_hidden = 128        # Number of hidden units of the RNN
 
 
 def build_graph(learning_rate, num_hidden, threshold):
@@ -188,6 +188,8 @@ def train(batch_size, epochs, x_train, y_train, x_valid, y_valid, sess, stream_v
     num_tr_iter = int(y_train.shape[0] / batch_size)
     num_valid_iter = int(y_valid.shape[0] / batch_size)
     for epoch in range(1, epochs+1):
+        print('Training epoch: {}'.format(epoch))
+        print('---------------------------------------------------------')
         x_train, y_train = randomize(x_train, y_train)
         loss_batch, acc_batch, prec_batch, rec_batch = [0, 0, 0, 0]
         for iteration in range(num_tr_iter):
@@ -223,6 +225,10 @@ def train(batch_size, epochs, x_train, y_train, x_valid, y_valid, sess, stream_v
         print("Validation Epoch: {0}, Loss: {1:.2f}, Accuracy: {2:.01%}, Precision={3:.01%}, Recall={4:.01%}".
               format(epoch, loss_valid, acc_valid, prec_valid, rec_valid))
         print('---------------------------------------------------------')
+        validation_loss.append(loss_valid)  # Loss for just last batch
+        validation_accuracies.append(acc_valid)  # Averaged accuracy over epoch - @xander how is this averaged?
+        validation_precisions.append(prec_valid)
+        validation_recalls.append(rec_valid)
 
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
