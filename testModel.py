@@ -160,15 +160,16 @@ print("Beginning beat detection")
 tt = pylab.arange(len(startCounts))
 durations = pylab.arange(1.1,30,.02) # avoid 1.0
 transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations])
-# not working sometimes, maybe because many large values close to spike?
-spikeCount = len([i for i in abs(transform) if i > 0.75 * pylab.argmax(abs(transform))])
-if spikeCount == 1:
-    top_k = np.array([pylab.argmax(abs(transform)),pylab.argmax(abs(transform))])
-else:
-    top_k = pylab.argpartition(abs(transform), -2)[-2:]
-    top_k = np.sort(top_k)
-# should be getting the larger of the 2
-quarter_duration = int(round(durations[top_k[1]]))
+# # not working sometimes, maybe because many large values close to spike?
+# spikeCount = len([i for i in abs(transform) if i > 0.75 * pylab.argmax(abs(transform))])
+# if spikeCount == 1:
+#     top_k = np.array([pylab.argmax(abs(transform)),pylab.argmax(abs(transform))])
+# else:
+#     top_k = pylab.argpartition(abs(transform), -2)[-2:]
+#     top_k = np.sort(top_k)
+# # should be getting the larger of the 2
+# quarter_duration = int(round(durations[top_k[1]]))
+quarter_duration = int(round(durations[pylab.argmax(abs(transform))]))
 
 pylab.plot(durations, abs(transform))
 pylab.xlabel('period (in timesteps)')
@@ -177,7 +178,7 @@ pylab.show()
 print("Estimated tempo (bpm): " + '%.3f' % (60.0/(quarter_duration * timeStep)))
 
 print("Shifting notes to tempo")
-precision = int(round(top_k[1]/top_k[0])) # how many parts to split a quarter note into
+precision = 2 #int(round(top_k[1]/top_k[0])) # how many parts to split a quarter note into
 print("Shifting notes to 1/" + str(precision) + " of a quarter")
 length *= precision
 timeStep /= precision
@@ -272,5 +273,5 @@ score.insert(0, rightScore.chordify())
 score.insert(0, leftScore.chordify())
 keySig = score.analyze('key')
 score.keySignature = keySig
-score.timeSignature = music21.TimeSignature("")
+score.timeSignature = music21.meter.TimeSignature("4/4") # change based on something? idk
 score.show()
