@@ -212,7 +212,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
         if epoch % 10 == 0:
-            saver.save(sess, "\\saved_models\\model_50000_128.ckpt")
+            saver.save(sess, "saved_models\\model_50000_128.ckpt")
             print("Model saved.")
     return training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, \
            validation_accuracies, validation_precisions, validation_recalls
