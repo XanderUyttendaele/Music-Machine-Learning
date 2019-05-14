@@ -85,7 +85,10 @@ graph = tf.get_default_graph()
 x = graph.get_tensor_by_name("x:0")
 op = graph.get_tensor_by_name("prediction:0")
 song_name = input("Song file name (wav): ")
-components, rate = librosa.load(song_name)
+try:
+    components, rate = librosa.load(song_name)
+except:
+    print("Error loading file.")
 song = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample,n_bins = frequency_bins,
                          bins_per_octave = bins_per_octave)).transpose()
 length = song.shape[0]
