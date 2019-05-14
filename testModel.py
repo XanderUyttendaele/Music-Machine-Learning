@@ -17,17 +17,19 @@ import copy
 # DONE: Fix 0 length notes
 # DONE: Shift all offsets such that first note starts on beat one?
 # TODO: Dynamics, use accents to figure out time signature and start note?
-timeStep = 512/22050.0
-lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
+# TODO: If another note starts after another note starts and is still playing, invalidate previous note?
+lengthToIgnore = 5 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
 gapLength = 2
 noteList = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
 column_interval_sample = 512
+timeStep = column_interval_sample/22050.0
 frequency_bins = 252
 bins_per_octave = 36
 keyCount = 88
 Fs = 22050
-stepCount = int(math.floor(0.5/(512/22050.0)))
+stepCount = int(math.floor(0.5/(column_interval_sample/22050.0)))
+thresholdValue = 0.4 # recall?
 
 def play():
     print("Playback started")
@@ -67,10 +69,16 @@ def closest(input, step):
         multiple += 1
     return multiple * step
 
+
+def threshold(i):
+    if i > thresholdValue:
+        return 1
+    return 0
+
 sess = tf.Session()
-saver = tf.train.import_meta_graph("E:\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM128_50_3.0"
+saver = tf.train.import_meta_graph("E:\\musicdata\\Music-Machine-Learning\\saved_models2\\biLSTM\\biLSTM256_50_4.0"
                                    ".ckpt.meta")
-saver.restore(sess, "E:\\musicdata\\Music-Machine-Learning\\saved_models\\biLSTM\\model_biLSTM128_50_3.0.ckpt")
+saver.restore(sess, "E:\\musicdata\\Music-Machine-Learning\\saved_models2\\biLSTM\\biLSTM256_50_4.0.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
@@ -84,23 +92,35 @@ length = song.shape[0]
 
 print("Song loaded.")
 print("Begin processing:")
-bottomNotesCorrect = 0
-bottomNotesTotal = 0
 offset = length % stepCount
-songData = [0]*length
-for i in range(length//stepCount):
-    feed_dict = {x:[song[i * stepCount: (i+1) * stepCount]]}
+songData = [[0] * keyCount]*length
+for i in range(length - stepCount + 1):
+    feed_dict = {x:[song[i : i + stepCount]]}
     output = sess.run(op, feed_dict)
     for j in range(stepCount):
-        songData[i*stepCount + j] = output[0][j]
-    # feed_dict = {x:[song[i * stepCount + offset: (i+1) * stepCount + offset]]}
-    # output = sess.run(op, feed_dict)
-    # for j in range(stepCount):
-    #     songData[i*stepCount + j + offset] = output[0][j]
-feed_dict = {x:[song[i * stepCount: (i+1) * stepCount]]}
-output = sess.run(op, feed_dict)
-for j in range(stepCount):
-    songData[-1 * (stepCount - j)] = output[0][j]
+        songData[i + j] = [sum(x) for x in zip(songData[i+j], output[0][j])]
+# for i in range(length//stepCount):
+#     feed_dict = {x:[song[i * stepCount: (i+1) * stepCount]]}
+#     output = sess.run(op, feed_dict)
+#     for j in range(stepCount):
+#         songData[i*stepCount + j] = output[0][j]
+#     feed_dict = {x:[song[i * stepCount + offset: (i+1) * stepCount + offset]]}
+#     output = sess.run(op, feed_dict)
+#     for j in range(stepCount):
+#         songData[i*stepCount + j + offset] = output[0][j]
+# feed_dict = {x:[song[i * stepCount: (i+1) * stepCount]]}
+# output = sess.run(op, feed_dict)
+# for j in range(stepCount):
+#     songData[-1 * (stepCount - j)] = output[0][j]
+for i in range(length):
+    if i < stepCount:
+        songData[i] = [x / (i + 1) for x in songData[i]]
+    elif i > length - stepCount:
+        songData[i] = [x / (length - i) for x in songData[i]]
+    else:
+        songData[i] = [x / stepCount for x in songData[i]]
+for i in range(length):
+    songData[i] = [threshold(x) for x in songData[i]]
 print("Done processing " + str(length) + " timesteps")
 print("Converting to start/end format") # list of lists in format [note, start time, stop time]
 processedSongData = []
@@ -204,6 +224,7 @@ for note in processedSongData:
         note[2] -= note[2] % shortestDuration
     else:
         note[2] += shortestDuration - (note[2] % shortestDuration)
+    # note[2] = note[1] + shortestDuration # set all notes to shortest length
     if note[2] - note[1] > 4 * shortestDuration: # anything larger than this doesn't usually happen (e.g. a note
     # with length of five sixteenths
         if precision == 4 and note[2] - note[1] <= 8 * shortestDuration: # allowing dotted quarters (only regular
@@ -215,18 +236,11 @@ for note in processedSongData:
         if not int(round(note[1] / shortestDuration)) % 2 == 1:
             note[1] -= shortestDuration
             note[2] -= shortestDuration
-    # note[1] = closest(note[1], shortestDuration)
-    # note[1] = note[1] - note[1] % (shortestDuration)
-    # note[2] = note[2] + shortestDuration - note[2] % (shortestDuration)
-    # note[2] = closest(note[2], shortestDuration)
-    # int((note[1]//(shortestDuration))*(shortestDuration)) does it make more sense to use closest or just floor - if there's
-    # a note in the middle of two 16ths or w/e do we assume it started at the previous 16th?
-    shift += note[1] - temp
-    shift += note[2] - temptwo
     if note[2] == note[1]:
         note[2] += shortestDuration
         print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/(quarter_duration)))
-    # int((note[2]//(shortestDuration))*(shortestDuration))
+    shift += note[1] - temp
+    shift += note[2] - temptwo
     shift += note[2] - temp
 shift /= (len(processedSongData)*2)
 shift *= timeStep
@@ -237,9 +251,9 @@ for note in processedSongData:
     if lastPosNotes[note[0]] > note[1]:
         note[1] = lastPosNotes[note[0]]
     lastPosNotes[note[0]] = note[2]
-# playback = input("Play predictions? (y/n)")
-# if playback == 'y':
-#     play()
+playback = input("Play predictions? (y/n)")
+if playback == 'y':
+    play()
 print("Beginning sheet music generation - generating notes")
 tempoMarking = music21.tempo.MetronomeMark(number=int(60.0/(quarter_duration * timeStep)))
 score = music21.stream.Score()
@@ -277,24 +291,26 @@ for a in range(length):
                 curLeft-=1
 rightScore = music21.stream.Score()
 leftScore = music21.stream.Score()
-rightLength = rightScore.quarterLength
-leftLength = leftScore.quarterLength
 for part in right:
     rightScore.insert(0, part)
 for part in left:
     leftScore.insert(0, part)
 # making them all end with full measures
+rightLength = rightScore.quarterLength
+leftLength = leftScore.quarterLength
 rightRest = music21.note.Rest()
 rightRest.duration.quarterLength = 4.0 - rightLength % 4
 rightScore.append(rightRest)
 leftRest = music21.note.Rest()
 leftRest.duration.quarterLength = 4.0 - leftLength % 4
 leftScore.append(leftRest)
-fullRest = music21.note.Rest()
-fullRest.duration.quarterLength = 4.0
 while leftScore.quarterLength > rightScore.quarterLength:
+    fullRest = music21.note.Rest()
+    fullRest.duration.quarterLength = 4.0
     rightScore.append(fullRest)
 while rightScore.quarterLength > leftScore.quarterLength:
+    fullRest = music21.note.Rest()
+    fullRest.duration.quarterLength = 4.0
     leftScore.append(fullRest)
 score.append(tempoMarking)
 score.insert(0, rightScore.chordify())
