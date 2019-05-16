@@ -3,12 +3,16 @@ import numpy as np
 import os
 import os.path as pt
 import math
+import h5py
 
 column_interval_sample = 512
 frequency_bins = 252
 bins_per_octave = 36
 num_notes = 88
 Fs = 22050
+
+training_dir = "song_data\\song_data_training\\"
+target_dir = "song_data\\song_data_labeled\\"
 
 def convert_to_array():
     count = 0
@@ -70,3 +74,39 @@ def segment_files(length):
                 np.save("song_data/song_data_training_shortened/" + base_path + "_" + str(i) + ".npy", song_segment)
                 label_segment = label[i*step_count:(i+1)*step_count]
                 np.save("song_data/song_data_labeled_shortened/" + base_path + "_" + str(i) + ".npy", label_segment)
+
+
+def generate_hdf5(numfiles, step_count, frequency_bins, num_notes):
+    features = np.zeros((numfiles, step_count, frequency_bins))
+    targets = np.zeros((numfiles, step_count, num_notes))
+
+    x = 0
+    for root, directories, filenames in os.walk(training_dir):
+        for filename in filenames:
+            if x < numfiles:
+                file_path = pt.join(root, filename)
+                temp = np.load(file_path)
+                clips = int(math.floor(temp.shape[0] / step_count))
+                for i in range(0, clips):
+                    if x < numfiles:
+                        features[x] = temp[step_count * i:step_count * (i + 1)]
+                        x += 1
+
+    x = 0
+    for root, directories, filenames in os.walk(target_dir):
+        for filename in filenames:
+            if x < numfiles:
+                file_path = pt.join(root, filename)
+                temp = np.load(file_path)
+                clips = int(math.floor(temp.shape[0] / step_count))
+                for i in range(0, clips):
+                    if x < numfiles:
+                        targets[x] = temp[step_count * i:step_count * (i+1)]
+                        x += 1
+
+    f = h5py.File("song_data.hdf5", "w")
+    f.create_dataset("features", data=features)
+    f.create_dataset("targets", data=targets)
+    f.close()
+
+    return f
