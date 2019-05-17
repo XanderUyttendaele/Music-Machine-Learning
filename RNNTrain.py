@@ -113,13 +113,13 @@ def RNN(x, weights, biases, timesteps, num_hidden):
 
 
 # x is for data, y is for targets
-x_train, x_valid, y_train, y_valid = load_data(50000)
+x_train, x_valid, y_train, y_valid = load_data(20000)
 
 learning_rate = 0.01    # The optimization initial learning rate
 epochs = 50             # Total number of training epochs - change back later, testing
 batch_size = 100        # Training batch size
 threshold = 0.8         # Threshold for determining a "note"
-num_hidden = 256         # Number of hidden units of the RNN
+num_hidden = 128        # Number of hidden units of the RNN
 
 
 
@@ -212,7 +212,7 @@ def train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss, opt
         # Reset accuracy op (otherwise calculates cumulative accuracy, which we probably don't want).
         sess.run(tf.variables_initializer(stream_vars_acc))
         if epoch % 10 == 0:
-            saver.save(sess, "\\saved_models\\model_50000_128.ckpt")
+            saver.save(sess, "saved_models\\test.ckpt")
             print("Model saved.")
     return training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, \
            validation_accuracies, validation_precisions, validation_recalls
@@ -262,8 +262,6 @@ sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall,
 training_loss, training_accuracies, training_precisions, training_recalls, validation_loss, validation_accuracies, \
     validation_precisions, validation_recalls = train(batch_size, epochs, x_train, y_train, sess, stream_vars_acc, loss,
                                                       optimizer, accuracy, precision, recall)
-np.save("weights_50000_128.npy" , W.eval())
-np.save("bias_50000_128.npy" , b.eval())
-print("Saved weights and biases.")
+
 plot_results(training_loss, training_accuracies, training_precisions, training_recalls, 'Training')
 plot_results(validation_loss, validation_accuracies, validation_precisions, validation_recalls, 'Validation')
