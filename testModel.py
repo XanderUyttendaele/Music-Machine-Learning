@@ -28,6 +28,9 @@ Fs = 22050
 songData = []
 
 def play():
+    """
+    Plays the current song data.
+    """
     print("Playback started")
     pygame.midi.init()
     player = pygame.midi.Output(0)
@@ -50,6 +53,13 @@ def play():
     pygame.midi.quit()
 
 def fourier_transform(signal, period, tt):
+    """
+    Gets the Fourier transform.
+    :param signal: The signals to process
+    :param period: A range of possible periods
+    :param tt: A range from 0 to the number of data points in signal
+    :return: The data after being passed through the transform.
+    """
     f = lambda func : (signal*func(2*pylab.pi*tt/period)).sum()
     return f(pylab.cos)+ 1j*f(pylab.sin)
 
@@ -101,24 +111,8 @@ while i < length:
                 songData[iterator][j] = False
                 noteLength+=1
                 iterator+=1
-            # code for fixing gaps, probably not a good idea (in tests, it messed up a lot of notes that should be
-            # separate)
-            # if noteLength != 0:
-            #     oldNoteLength = noteLength
-            #     for k in range(gapLength):
-            #         if songData[iterator + gapLength - k][j]:
-            #             for l in range(gapLength - k):
-            #                 songData[iterator + l][j] = False
-            #             noteLength += gapLength - k
-            #             while songData[iterator + gapLength - k][j]:
-            #                 songData[iterator + gapLength - k][j] = False
-            #                 noteLength += 1
-            #                 iterator += 1
-            #             print("Fixed gap of length " + str(l) + " Added on " + str(noteLength-oldNoteLength) + " "
-            #                                                                                                    "timesteps")
-            #             break
             if noteLength >= lengthToIgnore:
-                processedSongData.append([j,i, (i+noteLength)]) # * timeStep])
+                processedSongData.append([j,i, (i+noteLength)])
     i+=1
 
 startCounts = []
@@ -138,7 +132,7 @@ if playback == 'y':
     play()
 print("Beginning beat detection")
 tt = pylab.arange(len(startCounts))
-durations = pylab.arange(1.1,30,.02) # avoid 1.0
+durations = pylab.arange(1.1,30,.01) # avoid 1.0
 transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations] )
 optimal_i = pylab.argmax(abs(transform))
 quarter_duration = int(durations[optimal_i])
@@ -159,15 +153,12 @@ shift = 0
 for note in processedSongData:
     temp = note[1]
     note[1] = closest(note[1], quarter_duration/precision)
-    # int((note[1]//(quarter_duration/precision))*(quarter_duration/precision)) does it make more sense to use closest or just floor - if there's
-    # a note in the middle of two 16ths or w/e do we assume it started at the previous 16th?
     shift += note[1] - temp
     temp = note[2]
     note[2] = closest(note[2], quarter_duration/precision)
     if note[2] == note[1]:
         note[2] += quarter_duration/precision
         print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/(quarter_duration)))
-    # int((note[2]//(quarter_duration/precision))*(quarter_duration/precision))
     shift += note[2] - temp
 shift /= (len(processedSongData)*2)
 shift *= timeStep
