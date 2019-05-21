@@ -76,9 +76,9 @@ def threshold(i):
     return 0
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("E:\\musicdata\\Music-Machine-Learning\\saved_models2\\biLSTM\\biLSTM256_50_4.0"
+saver = tf.train.import_meta_graph("saved_models2\\biLSTM\\biLSTM256_50_4.0"
                                    ".ckpt.meta")
-saver.restore(sess, "E:\\musicdata\\Music-Machine-Learning\\saved_models2\\biLSTM\\biLSTM256_50_4.0.ckpt")
+saver.restore(sess, "saved_models2\\biLSTM\\biLSTM256_50_4.0.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
@@ -321,4 +321,6 @@ score.insert(0, leftScore.chordify())
 keySig = score.analyze('key')
 score.keySignature = keySig
 score.timeSignature = music21.meter.TimeSignature("4/4") # change based on something? idk
+score.insert(0, music21.metadata.Metadata())
+score.metadata.title = song_name.split(".")[0].split("\\")[-1]
 score.show()

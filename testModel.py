@@ -76,8 +76,8 @@ def closest(input, step):
     return multiple * step
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("saved_models\\model.ckpt.meta")
-saver.restore(sess, "\\saved_models\\model_50000_128.ckpt")
+saver = tf.train.import_meta_graph("saved_models\\test.ckpt.meta")
+saver.restore(sess, "saved_models\\test.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
@@ -212,4 +212,6 @@ score.insert(0, rightScore.chordify())
 score.insert(0, leftScore.chordify())
 keySig = score.analyze('key')
 score.insert(0, keySig)
+score.insert(0, music21.metadata.Metadata())
+score.metadata.title = song_name.split(".")[0].split("\\")[-1]
 score.show()
