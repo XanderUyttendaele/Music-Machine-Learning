@@ -5,27 +5,18 @@ import time
 import pylab
 import music21
 import librosa
-
-# TODO: more precision? can make new numpy arrays with more precise values (smaller timestep) and feed through program
-# DONE: move preprocess into this file so we can input wav directly
-# TODO: Try different precision values
-# DONE: Try to detect if the same note is being held but program is registering as separate notes - before
-#  quantizing, check if there are a small amount of 0s (maybe continue a few more after finding some)
-# TODO: Consider chord detection? Seems like certain notes are being dropped out early
-# DONE: Fix 0 length notes
-# DONE: Shift all offsets such that first note starts on beat one?
-# TODO: Dynamics, use accents to figure out time signature and start note?
 timeStep = 512/22050.0
-lengthToIgnore = 10 # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
+lengthToIgnore = 10  # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
 gapLength = 2
-noteList = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"]
+noteList = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 column_interval_sample = 512
 frequency_bins = 252
 bins_per_octave = 36
 keyCount = 88
 Fs = 22050
 songData = []
+
 
 def play():
     """
@@ -52,6 +43,7 @@ def play():
     del player
     pygame.midi.quit()
 
+
 def fourier_transform(signal, period, tt):
     """
     Gets the Fourier transform.
@@ -60,20 +52,22 @@ def fourier_transform(signal, period, tt):
     :param tt: A range from 0 to the number of data points in signal
     :return: The data after being passed through the transform.
     """
-    f = lambda func : (signal*func(2*pylab.pi*tt/period)).sum()
-    return f(pylab.cos)+ 1j*f(pylab.sin)
+    f = lambda func: (signal*func(2*pylab.pi*tt/period)).sum()
+    return f(pylab.cos) + 1j*f(pylab.sin)
 
-def closest(input, step):
+
+def closest(value, step):
     """
-    Returns closest multiple of step to input
+    Returns closest multiple of step to value
     """
     step = int(step)
-    input = int(input)
-    multiple = input//step
-    input -= step*multiple
-    if input > step / 2:
+    value = int(value)
+    multiple = value//step
+    value -= step*multiple
+    if value > step / 2:
         multiple += 1
     return multiple * step
+
 
 sess = tf.Session()
 saver = tf.train.import_meta_graph("saved_models\\test.ckpt.meta")
@@ -84,20 +78,24 @@ graph = tf.get_default_graph()
 x = graph.get_tensor_by_name("x:0")
 op = graph.get_tensor_by_name("prediction:0")
 song_name = input("Song file name (wav): ")
-components, rate = librosa.load(song_name)
-song = np.abs(librosa.cqt(y = components, sr = rate, hop_length = column_interval_sample,n_bins = frequency_bins,
-                         bins_per_octave = bins_per_octave)).transpose()
-length = song.shape[0]
+song = None
+try:
+    components, rate = librosa.load(song_name)
+    song = np.abs(librosa.cqt(y=components, sr=rate, hop_length=column_interval_sample, n_bins=frequency_bins,
+                              bins_per_octave=bins_per_octave)).transpose()
+except (FileNotFoundError, FileExistsError) as e:
+    print("Error loading file.")
 
+length = song.shape[0]
 print("Song loaded.")
 print("Begin processing:")
 bottomNotesCorrect = 0
 bottomNotesTotal = 0
 for i in range(length):
-    feed_dict = {x:[[song[i] for a in range(21)]]}
+    feed_dict = {x: [[song[i] for a in range(21)]]}
     songData.append(sess.run(op, feed_dict)[0])
 print("Done processing " + str(length) + " timesteps")
-print("Converting to start/end format") # list of lists in format [note, start time, stop time]
+print("Converting to start/end format")  # list of lists in format [note, start time, stop time]
 processedSongData = []
 songData.append([False]*keyCount)
 i = 0
@@ -109,11 +107,11 @@ while i < length:
             iterator = i
             while songData[iterator][j]:
                 songData[iterator][j] = False
-                noteLength+=1
-                iterator+=1
+                noteLength += 1
+                iterator += 1
             if noteLength >= lengthToIgnore:
-                processedSongData.append([j,i, (i+noteLength)])
-    i+=1
+                processedSongData.append([j, i, (i+noteLength)])
+    i += 1
 
 startCounts = []
 endCounts = []
@@ -132,8 +130,8 @@ if playback == 'y':
     play()
 print("Beginning beat detection")
 tt = pylab.arange(len(startCounts))
-durations = pylab.arange(1.1,30,.01) # avoid 1.0
-transform = pylab.array([fourier_transform(startCounts,d, tt) for d in durations] )
+durations = pylab.arange(1.1, 30, .01)  # avoid 1.0
+transform = pylab.array([fourier_transform(startCounts, d, tt) for d in durations])
 optimal_i = pylab.argmax(abs(transform))
 quarter_duration = int(durations[optimal_i])
 
@@ -144,11 +142,11 @@ pylab.show()
 print("Estimated tempo (bpm): " + '%.3f' % (60.0/(quarter_duration * timeStep)))
 
 print("Shifting notes to tempo")
-precision = 2 # how many parts to split a quarter note into
+precision = 2  # how many parts to split a quarter note into
 length *= precision
 timeStep /= precision
 quarter_duration *= precision
-processedSongData = [[note[0],note[1]*precision,note[2]*precision]for note in processedSongData]
+processedSongData = [[note[0], note[1]*precision, note[2]*precision]for note in processedSongData]
 shift = 0
 for note in processedSongData:
     temp = note[1]
@@ -158,7 +156,7 @@ for note in processedSongData:
     note[2] = closest(note[2], quarter_duration/precision)
     if note[2] == note[1]:
         note[2] += quarter_duration/precision
-        print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/(quarter_duration)))
+        print("Fixed 0 length note " + str(note[0]) + " at " + str(note[1]/quarter_duration))
     shift += note[2] - temp
 shift /= (len(processedSongData)*2)
 shift *= timeStep
@@ -186,21 +184,21 @@ for a in range(length):
             temp = noteList[processedSongData[c][0] + 9 - octave * 12]
             toAppend = music21.note.Note(temp+str(octave))
             toAppend.quarterLength = (processedSongData[c][2]-processedSongData[c][1])/quarter_duration
-            if processedSongData[c][0]>=39:
+            if processedSongData[c][0] >= 39:
                 if curRight >= len(right):
                     right.append(music21.stream.Part())
-                right[curRight].insert(processedSongData[c][1]/quarter_duration,toAppend)
-                curRight+=1
+                right[curRight].insert(processedSongData[c][1]/quarter_duration, toAppend)
+                curRight += 1
             else:
                 if curLeft >= len(left):
                     left.append(music21.stream.Part())
-                left[curLeft].insert(processedSongData[c][1]/quarter_duration,toAppend)
-                curLeft+=1
+                left[curLeft].insert(processedSongData[c][1]/quarter_duration, toAppend)
+                curLeft += 1
         if processedSongData[c][2] == a:
-            if processedSongData[c][0]>=39:
-                curRight-=1
+            if processedSongData[c][0] >= 39:
+                curRight -= 1
             else:
-                curLeft-=1
+                curLeft -= 1
 rightScore = music21.stream.Score()
 leftScore = music21.stream.Score()
 for part in right:
