@@ -17,6 +17,11 @@ keyRange = tf.convert_to_tensor(np.arange(n_classes))
 
 
 def load_data():
+    """
+    Loads files from training_dir and target_dir, then splits data into training and validation sets according to
+    training_portions global variable.
+    :return: training labels, training targets, validation data, and validation targets
+    """
     clipCount = 0
     for root, directories, filenames in os.walk(training_dir):
         for filename in filenames:
@@ -60,6 +65,12 @@ def load_data():
 
 
 def randomize(x, y):
+    """
+    Shuffle two numpy arrays in unison (according to the same permutation).
+    :param x: the first numpy array
+    :param y: the second numpy array
+    :return: shuffled versions of both arrays
+    """
     permutation = np.random.permutation(y.shape[0])
     shuffled_x = x[permutation]
     shuffled_y = y[permutation]
@@ -67,12 +78,18 @@ def randomize(x, y):
 
 
 def get_next_batch(x, y, start, end):
+    """
+    Slices two numpy arrays in unison according to the same start
+    and end indices.
+    :param x: the first numpy array
+    :param y: the second numpy array
+    :return: corresponding slices of arrays
+    """
     x_batch = x[start:end]
     y_batch = y[start:end]
     return x_batch, y_batch
 
 
-# weight and bias wrappers
 def weight_variable(shape):
     """
     Create a weight variable with appropriate initialization
@@ -96,33 +113,29 @@ def bias_variable(shape):
 
 
 def RNN(x, weights, biases, num_hidden):
-    # Prepare data shape to match `rnn` function requirements
-    # Current data input shape: (batch_size, timesteps, n_input)
-    # Required shape: 'timesteps' tensors list of shape (batch_size, n_input)
-
-    # Unstack to get a list of 'timesteps' tensors of shape (batch_size, n_input)
-    # x = tf.unstack(x, timesteps, 1)
-
-    # Define a rnn cell with tensorflow
+    """
+    Defines an long-short-term-memory cell according to the parameters.
+    :param x: input to bidirectional LSTM; a placeholder at time of initialization
+    :param weights: a 2D array of weights of size (num_hidden, n_classes) to be
+        multiplied with the output of the bidirectional LSTM cells.
+    :param biases: an 1D array of biases of length (n_classes) to be added to the
+        product of the matrix multiplication with the output of the bidirectional LSTM cells.
+    :param num_hidden: the number of hidden layers of the LSTM (i.e. the number of nodes
+        in the pure LSTM output.
+    :return: the output of the LSTM operated on by weights and biases
+    """
     lstm_cell_fw = tf.contrib.rnn.LSTMCell(num_hidden)
     lstm_cell_bw = tf.contrib.rnn.LSTMCell(num_hidden)
-
-    # Get lstm cell output
-    # If no initial_state is provided, dtype must be specified
-    # If no initial cell state is provided, they will be initialized to zero
     outputs, output_states = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, lstm_cell_bw, x, dtype=tf.float32)
 
-    def temp(input):
-        return tf.matmul(input, weights) + biases
-
-    # current format: [batch_size, timesteps, num_hidden]
+    def temp(value):
+        return tf.matmul(value, weights) + biases
 
     output_fw = tf.map_fn(temp, outputs[0])
     output_bw = tf.map_fn(temp, outputs[1])
     return tf.math.divide(tf.math.add(output_fw, output_bw), 2)
 
 
-# x is for data, y is for targets
 x_train, x_valid, y_train, y_valid = load_data()
 
 learning_rate = 0.01   # The optimization initial learning rate
@@ -133,6 +146,13 @@ num_hidden = 128        # Number of hidden units of the RNN
 
 
 def build_graph(learning_rate, num_hidden, threshold):
+    """
+    Build the tensorflow graph that will be used for training
+    :param learning_rate: the learning rate of the Adam optimizer
+    :param num_hidden: the number of hidden units in the RNN
+    :param threshold: the classification threshold for whether a given note is being played
+    :return: all relevant nodes of the graph
+    """
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
@@ -175,6 +195,21 @@ def build_graph(learning_rate, num_hidden, threshold):
 
 
 def train(batch_size, epochs, x_train, y_train, x_valid, y_valid, sess, stream_vars_acc, loss, optimizer, accuracy, precision, recall):
+    """
+    Train model according to above model hyperparameters and pre-initialized graph.
+    :param batch_size: the number of training examples in each training batch
+    :param epochs: the number of times run through all data in training
+    :param x_train: training labels
+    :param y_train: training targets
+    :param sess: tensorflow interactive session being used to run graph
+    :param stream_vars_acc: local variables related to accuracy metrics
+    :param loss: loss function for model
+    :param optimizer: optimizer as defined in build_graph()
+    :param accuracy: accuracy metric for model
+    :param precision: precision metric for model
+    :param recall: recall metric for model
+    :return: data of model's performance after each epoch
+    """
     training_loss = []
     training_accuracies = []
     training_precisions = []
@@ -240,6 +275,14 @@ def train(batch_size, epochs, x_train, y_train, x_valid, y_valid, sess, stream_v
 
 
 def plot_results(losses, accuracies, precisions, recalls, train_or_val):
+    """
+    Plot results of model (loss, accuracy, precision, recall vs epochs)
+    :param losses: list of losses for each epoch of training
+    :param accuracies: list of accuracies for each epoch of training
+    :param accuracies: list of precisions for each epoch of training
+    :param accuracies: list of recalls for each epoch of training
+    :param train_or_val: whether this is data for the training set of the validation set
+    """
     epoch_range = np.arange(epochs)
 
     plt.figure(1)
