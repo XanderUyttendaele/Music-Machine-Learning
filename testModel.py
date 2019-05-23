@@ -5,6 +5,7 @@ import time
 import pylab
 import music21
 import librosa
+
 timeStep = 512/22050.0
 lengthToIgnore = 10  # ignore notes of this length or shorter - depending on length, can cause notes of length 0 after
 # shifting
@@ -70,8 +71,8 @@ def closest(value, step):
 
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("saved_models\\test.ckpt.meta")
-saver.restore(sess, "saved_models\\test.ckpt")
+saver = tf.train.import_meta_graph("saved_models\\model.ckpt.meta")
+saver.restore(sess, "saved_models\\model.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
