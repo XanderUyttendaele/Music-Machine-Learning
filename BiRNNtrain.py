@@ -112,17 +112,17 @@ def bias_variable(shape):
                            initializer=initial)
 
 
-def RNN(x, weights, biases, num_hidden):
+def biRNN(x, weights, biases, num_hidden):
     """
-    Defines an long-short-term-memory cell according to the parameters.
+    Defines two bidirectional LSTM cells according to the parameters.
     :param x: input to bidirectional LSTM; a placeholder at time of initialization
     :param weights: a 2D array of weights of size (num_hidden, n_classes) to be
         multiplied with the output of the bidirectional LSTM cells.
     :param biases: an 1D array of biases of length (n_classes) to be added to the
         product of the matrix multiplication with the output of the bidirectional LSTM cells.
     :param num_hidden: the number of hidden layers of the LSTM (i.e. the number of nodes
-        in the pure LSTM output.
-    :return: the output of the LSTM operated on by weights and biases
+        in the bidirectional LSTM output.
+    :return: the output of the bidirectional LSTM operated on by weights and biases
     """
     lstm_cell_fw = tf.contrib.rnn.LSTMCell(num_hidden)
     lstm_cell_bw = tf.contrib.rnn.LSTMCell(num_hidden)
@@ -157,6 +157,7 @@ def build_graph(learning_rate, num_hidden, threshold):
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
     sess = tf.InteractiveSession(config = config)
+
     # Placeholders for inputs (x) and outputs(y)
     x = tf.placeholder(tf.float32, shape=(None, None, num_input), name = "x")
     y = tf.placeholder(tf.float32, shape=(None, None, n_classes))
@@ -166,8 +167,7 @@ def build_graph(learning_rate, num_hidden, threshold):
 
     # create bias vector initialized as zero
     b = bias_variable(shape=[n_classes])
-    output_logits = RNN(x, W, b, num_hidden)
-    # output = RNNTest(x, W, b, lstm_cell)
+    output_logits = biRNN(x, W, b, num_hidden)
 
     y_pred = tf.nn.sigmoid(output_logits)
 
@@ -181,9 +181,7 @@ def build_graph(learning_rate, num_hidden, threshold):
     precision = tf.metrics.precision(y, prediction)[1]
     recall = tf.metrics.recall(y, prediction)[1]
     stream_vars_acc = [v for v in tf.local_variables() if 'accuracy/' in v.name or 'precision/' in v.name or 'recall/' in v.name]
-    # y_pred_test = tf.greater(tf.nn.sigmoid(output), threshold, name = "test")
-    # #output = tf.cond(evaluate, lambda: RNNTest(x,xsize,W,b,lstm_cell),lambda: tf.constant(0.0))
-    # #fullPrediction = tf.nn.sigmoid(output,name = "fullPrediction")
+
     # Creating the ops for initializing all variables
     init_g = tf.global_variables_initializer()
     init_l = tf.local_variables_initializer()
@@ -191,7 +189,7 @@ def build_graph(learning_rate, num_hidden, threshold):
     sess.run(init_g)
     sess.run(init_l)
 
-    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b #, output, fullPrediction
+    return sess, stream_vars_acc, loss, optimizer, prediction, accuracy, precision, recall, x, y, W, b
 
 
 def train(batch_size, epochs, x_train, y_train, x_valid, y_valid, sess, stream_vars_acc, loss, optimizer, accuracy, precision, recall):
