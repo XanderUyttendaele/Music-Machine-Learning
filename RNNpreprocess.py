@@ -5,14 +5,17 @@ import os.path as pt
 import math
 import h5py
 
+# Parameters associated with loading wav files and constant q transform.
 column_interval_sample = 512
 frequency_bins = 252
 bins_per_octave = 36
 num_notes = 88
 Fs = 22050
 
+# Directories in which training labels and targets are stored
 training_dir = "song_data\\song_data_training\\"
 target_dir = "song_data\\song_data_labeled\\"
+
 
 def convert_to_array():
     count = 0

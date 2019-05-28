@@ -80,9 +80,9 @@ def threshold(i):
 
 
 sess = tf.Session()
-saver = tf.train.import_meta_graph("saved_models2\\biLSTM\\biLSTM256_50_4.0"
+saver = tf.train.import_meta_graph("saved_models2\\biLSTM\\biLSTM256_50_10.0"
                                    ".ckpt.meta")
-saver.restore(sess, "saved_models2\\biLSTM\\biLSTM256_50_4.0.ckpt")
+saver.restore(sess, "saved_models2\\biLSTM\\biLSTM256_50_10.0.ckpt")
 
 print("Model restored.")
 graph = tf.get_default_graph()
