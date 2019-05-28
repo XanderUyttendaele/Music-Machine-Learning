@@ -206,11 +206,29 @@ for part in right:
     rightScore.insert(0, part)
 for part in left:
     leftScore.insert(0, part)
+# making them all end with full measures
+rightLength = rightScore.quarterLength
+leftLength = leftScore.quarterLength
+rightRest = music21.note.Rest()
+rightRest.duration.quarterLength = 4.0 - rightLength % 4
+rightScore.append(rightRest)
+leftRest = music21.note.Rest()
+leftRest.duration.quarterLength = 4.0 - leftLength % 4
+leftScore.append(leftRest)
+while leftScore.quarterLength > rightScore.quarterLength:
+    fullRest = music21.note.Rest()
+    fullRest.duration.quarterLength = 4.0
+    rightScore.append(fullRest)
+while rightScore.quarterLength > leftScore.quarterLength:
+    fullRest = music21.note.Rest()
+    fullRest.duration.quarterLength = 4.0
+    leftScore.append(fullRest)
 score.append(tempoMarking)
 score.insert(0, rightScore.chordify())
 score.insert(0, leftScore.chordify())
 keySig = score.analyze('key')
 score.insert(0, keySig)
+score.keySignature = keySig
 score.insert(0, music21.metadata.Metadata())
 score.metadata.title = song_name.split(".")[0].split("\\")[-1]
 score.show()
